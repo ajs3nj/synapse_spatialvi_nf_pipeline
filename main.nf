@@ -87,16 +87,19 @@ process RUN_SPATIALVI {
 }
 
 // Upload the staged FASTQ tarball to Synapse (used in test_staging_only mode)
+// Also outputs the spatialvi-formatted samplesheet for use in the full pipeline.
 process STORE_STAGED_TARBALL {
   tag "${meta.sample}"
   container "sagebionetworks/synapsepythonclient:v2.6.0"
   secret "SYNAPSE_AUTH_TOKEN"
+  publishDir "${params.outdir}/staging_test", pattern: 'samplesheet_spatialvi.csv', mode: 'copy'
 
   input:
   tuple val(meta), path(staged)
 
   output:
   tuple val(meta), path("*.tar.gz"), emit: stored
+  path "samplesheet_spatialvi.csv", emit: samplesheet
 
   script:
   def parent = meta.results_parent_id ?: params.results_parent_id
@@ -104,6 +107,7 @@ process STORE_STAGED_TARBALL {
   """
   synapse store --parentId ${parent} staged/${sample}_fastqs.tar.gz
   cp staged/${sample}_fastqs.tar.gz ./
+  cp staged/samplesheet.csv samplesheet_spatialvi.csv
   """
 }
 

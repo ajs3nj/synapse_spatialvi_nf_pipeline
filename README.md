@@ -65,6 +65,8 @@ To verify **file staging → tarball generation → upload to Synapse** without 
 
 This runs: **DOWNLOAD_AND_STAGE** (download 5 files from Synapse, pack FASTQs into `{sample}_fastqs.tar.gz`) → **STORE_STAGED_TARBALL** (upload that tarball to Synapse). No spatialvi or heavy compute. Check the target Synapse folder for `{sample}_fastqs.tar.gz`.
 
+The test also writes a **spatialvi-formatted samplesheet** to `{outdir}/staging_test/samplesheet_spatialvi.csv` (default: `results/staging_test/samplesheet_spatialvi.csv`). It has the same format expected by the spatialvi stage (`sample`, `fastq_dir`, `image`, `slide`, `area`) and can be used when running the full pipeline.
+
 ## Running on Seqera Tower
 
 1. **Pipeline**  
@@ -100,7 +102,8 @@ Additional spatialvi options (e.g. `--spaceranger_reference`, `--spaceranger_pro
 
 ## Outputs
 
-- **Per sample**: a tarball `{sample}_spatialvi_results.tar.gz` containing the nf-core/spatialvi output (Space Ranger outputs, reports, data, etc.) is uploaded to the Synapse folder given by `results_parent_id` or the row’s `results_parent_id`.
+- **Full pipeline:** Per sample, a tarball `{sample}_spatialvi_results.tar.gz` containing the nf-core/spatialvi output (Space Ranger outputs, reports, data, etc.) is uploaded to the Synapse folder given by `results_parent_id` or the row’s `results_parent_id`.
+- **Test run (`--test_staging_only`):** The FASTQ tarball `{sample}_fastqs.tar.gz` is uploaded to Synapse, and a spatialvi-formatted samplesheet is written to `{outdir}/staging_test/samplesheet_spatialvi.csv`.
 
 ## Notes
 
