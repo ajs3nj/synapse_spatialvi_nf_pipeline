@@ -1,0 +1,22 @@
+# Nextflow
+.nextflow*
+work/
+singularity_cache/
+nf-core-spatialvi/
+
+# IDE / OS
+.idea/
+.DS_Store
+*.swp
+*.swo
+
+# Logs and reports
+*.log
+*.html
+*.trace
+*.timeline.*
+
+# Secrets (do not commit)
+.env
+*.pat
+*_token*
