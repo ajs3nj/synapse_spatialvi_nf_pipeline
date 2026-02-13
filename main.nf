@@ -48,7 +48,7 @@ process DOWNLOAD_AND_STAGE {
     mv staged/image_file "staged/image.\$ext"
     imgname="image.\$ext"
   else
-    imgname=\$(ls staged/ | grep -v fastqs | grep -v samplesheet | grep -v '*.tar.gz' || true | head -1)
+    imgname=\$(ls staged/ | grep -v fastqs | grep -v samplesheet | grep -v '\\.tar\\.gz\$' || true | head -1)
   fi
   # Samplesheet for spatialvi: fastq_dir = sample-prefixed tarball (paths relative to staged dir, which becomes workdir)
   echo "sample,fastq_dir,image,slide,area" > staged/samplesheet.csv
