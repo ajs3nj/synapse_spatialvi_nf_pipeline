@@ -62,7 +62,7 @@ process RUN_SPATIALVI {
   container "nextflowio/nextflow:docker"
   cpus 8
   memory 32.GB
-  timeout '7d'
+  time '7d'
 
   input:
   tuple val(meta), path(staged)
