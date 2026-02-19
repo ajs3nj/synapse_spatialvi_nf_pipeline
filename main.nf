@@ -36,21 +36,15 @@ process DOWNLOAD_AND_STAGE {
   synapse get ${id2} && mv \$(ls -t -p | grep -v / | head -1) staged/fastqs/
   synapse get ${id3} && mv \$(ls -t -p | grep -v / | head -1) staged/fastqs/
   synapse get ${id4} && mv \$(ls -t -p | grep -v / | head -1) staged/fastqs/
-  synapse get ${id_img} && mv \$(ls -t -p | grep -v / | head -1) staged/image_file
+  synapse get ${id_img} && mv \$(ls -t -p | grep -v / | head -1) staged/
   shopt -s nullglob
   for f in staged/fastqs/*\\ *; do [ -e "\$f" ] && mv "\$f" "\${f// /_}"; done
+  for f in staged/*\\ *; do [ -e "\$f" ] && mv "\$f" "\${f// /_}"; done
   # Pack FASTQs into a tarball with sample name as prefix (spatialvi accepts .tar.gz for fastq_dir)
   tar -czvf staged/${sample}_fastqs.tar.gz -C staged/fastqs .
   rm -rf staged/fastqs
-  if [ -f staged/image_file ]; then
-    ext=\$(basename staged/image_file | sed 's/.*\\.//' 2>/dev/null)
-    [ -z "\$ext" ] || [ "\$ext" = image_file ] && ext=img
-    mv staged/image_file "staged/image.\$ext"
-    imgname="image.\$ext"
-  else
-    imgname=\$(ls staged/ | grep -v fastqs | grep -v samplesheet | grep -v '\\.tar\\.gz\$' || true | head -1)
-  fi
-  # Samplesheet for spatialvi: fastq_dir = sample-prefixed tarball (paths relative to staged dir, which becomes workdir)
+  imgname=\$(ls staged/ | grep -v '\\.tar\\.gz\$' || true | head -1)
+  # Samplesheet for spatialvi: fastq_dir and image (RUN_SPATIALVI rewrites to absolute paths for tarball)
   echo "sample,fastq_dir,image,slide,area" > staged/samplesheet.csv
   echo "${sample},${sample}_fastqs.tar.gz,\${imgname},${slide},${area}" >> staged/samplesheet.csv
   """
@@ -76,6 +70,8 @@ process RUN_SPATIALVI {
   set -e
   cp -r ${staged} ./workdir
   cd workdir
+  WORKDIR=\$(pwd)
+  awk -v w="\$WORKDIR" -F',' 'NR==1{print;next}{ \$2=w"/"\$2; \$3=w"/"\$3; print }' OFS=',' samplesheet.csv > samplesheet_fullpath.csv && mv samplesheet_fullpath.csv samplesheet.csv
   nextflow run ${params.spatialvi_pipeline} \\
     -r ${params.spatialvi_release} \\
     --input samplesheet.csv \\
