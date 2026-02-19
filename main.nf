@@ -30,6 +30,7 @@ process DOWNLOAD_AND_STAGE {
   def sample = meta.sample
   def slide = meta.slide
   def area = meta.area ?: ''
+  def stagingAbs = file("${params.outdir}/staging").toAbsolutePath()
   """
   set -e
   mkdir -p staged/fastqs
@@ -45,9 +46,9 @@ process DOWNLOAD_AND_STAGE {
   tar -czvf staged/${sample}_fastqs.tar.gz -C staged/fastqs .
   rm -rf staged/fastqs
   imgname=\$(ls staged/ | grep -v '\\.tar\\.gz\$' || true | head -1)
-  # Samplesheet for spatialvi: fastq_dir and image (RUN_SPATIALVI rewrites to absolute paths for tarball)
+  # Absolute paths to published staging dir so samplesheet works from any cwd
   echo "sample,fastq_dir,image,slide,area" > staged/samplesheet.csv
-  echo "${sample},${sample}_fastqs.tar.gz,\${imgname},${slide},${area}" >> staged/samplesheet.csv
+  echo "${sample},${stagingAbs}/${sample}_fastqs.tar.gz,${stagingAbs}/\${imgname},${slide},${area}" >> staged/samplesheet.csv
   """
 }
 
