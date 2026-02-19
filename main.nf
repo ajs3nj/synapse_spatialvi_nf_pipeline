@@ -43,7 +43,7 @@ process DOWNLOAD_AND_STAGE {
   tar -czvf staged/${sample}_fastqs.tar.gz -C staged/fastqs .
   rm -rf staged/fastqs
   if [ -f staged/image_file ]; then
-    ext=\$(echo staged/image_file | sed 's/.*\\.//' 2>/dev/null)
+    ext=\$(basename staged/image_file | sed 's/.*\\.//' 2>/dev/null)
     [ -z "\$ext" ] || [ "\$ext" = image_file ] && ext=img
     mv staged/image_file "staged/image.\$ext"
     imgname="image.\$ext"
