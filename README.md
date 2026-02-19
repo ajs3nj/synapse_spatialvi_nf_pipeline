@@ -102,6 +102,7 @@ Additional spatialvi options (e.g. `--spaceranger_reference`, `--spaceranger_pro
 
 ## Outputs
 
+- **Staging (all runs):** The staged FASTQ tarball `{sample}_fastqs.tar.gz`, image file, and spatialvi samplesheet are published to `{outdir}/staging/` (similar to [nf-synapse SYNSTAGE](https://github.com/Sage-Bionetworks-Workflows/nf-synapse)). Paths in the samplesheet are relative so you can run spatialvi from that directory if needed.
 - **Full pipeline:** Per sample, a tarball `{sample}_spatialvi_results.tar.gz` containing the nf-core/spatialvi output (Space Ranger outputs, reports, data, etc.) is uploaded to the Synapse folder given by `results_parent_id` or the row’s `results_parent_id`.
 - **Test run (`--test_staging_only`):** The FASTQ tarball `{sample}_fastqs.tar.gz` is uploaded to Synapse, and a spatialvi-formatted samplesheet is written to `{outdir}/staging_test/samplesheet_spatialvi.csv`.
 

@@ -13,6 +13,7 @@ process DOWNLOAD_AND_STAGE {
   tag "${meta.sample}"
   container "sagebionetworks/synapsepythonclient:v2.6.0"
   secret "SYNAPSE_AUTH_TOKEN"
+  publishDir "${params.outdir}", path: 'staging', mode: 'copy'
 
   input:
   tuple val(meta), val(synapse_ids)
