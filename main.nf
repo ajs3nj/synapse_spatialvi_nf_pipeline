@@ -30,9 +30,24 @@ process DOWNLOAD_AND_STAGE {
   def sample = meta.sample
   def slide = meta.slide
   def area = meta.area ?: ''
-  def stagingAbs = file("${params.outdir}/staging").toAbsolutePath()
+  def outdirStr = params.outdir.toString()
+  def stagingPrefix = outdirStr.startsWith('s3://') ? "${outdirStr}/staging" : file("${params.outdir}/staging").toAbsolutePath().toString()
   """
   set -e
+  STAGING_ABS="${stagingPrefix}"
+  # Reuse existing staged files if tarball and image already exist (e.g. re-run with tweaked options)
+  if [ -f "\${STAGING_ABS}/${sample}_fastqs.tar.gz" ]; then
+    imgname=\$(ls "\${STAGING_ABS}" 2>/dev/null | grep -v samplesheet | grep -v '\\.tar\\.gz\$' || true | head -1)
+    if [ -n "\$imgname" ] && [ -f "\${STAGING_ABS}/\${imgname}" ]; then
+      mkdir -p staged
+      cp "\${STAGING_ABS}/${sample}_fastqs.tar.gz" staged/
+      cp "\${STAGING_ABS}/\${imgname}" staged/
+      echo "sample,fastq_dir,image,slide,area" > staged/samplesheet.csv
+      echo "${sample},${stagingPrefix}/${sample}_fastqs.tar.gz,${stagingPrefix}/\${imgname},${slide},${area}" >> staged/samplesheet.csv
+      exit 0
+    fi
+  fi
+  # Download and stage from Synapse
   mkdir -p staged/fastqs
   synapse get ${id1} && mv \$(ls -t -p | grep -v / | head -1) staged/fastqs/
   synapse get ${id2} && mv \$(ls -t -p | grep -v / | head -1) staged/fastqs/
@@ -48,7 +63,7 @@ process DOWNLOAD_AND_STAGE {
   imgname=\$(ls staged/ | grep -v '\\.tar\\.gz\$' || true | head -1)
   # Absolute paths to published staging dir so samplesheet works from any cwd
   echo "sample,fastq_dir,image,slide,area" > staged/samplesheet.csv
-  echo "${sample},${stagingAbs}/${sample}_fastqs.tar.gz,${stagingAbs}/\${imgname},${slide},${area}" >> staged/samplesheet.csv
+  echo "${sample},${stagingPrefix}/${sample}_fastqs.tar.gz,${stagingPrefix}/\${imgname},${slide},${area}" >> staged/samplesheet.csv
   """
 }
 
@@ -104,6 +119,8 @@ process STORE_STAGED_TARBALL {
   def sample = meta.sample
   """
   synapse store --parentId ${parent} staged/${sample}_fastqs.tar.gz
+  cp staged/samplesheet.csv ${sample}_samplesheet.csv
+  synapse store --parentId ${parent} ${sample}_samplesheet.csv
   cp staged/${sample}_fastqs.tar.gz ./
   cp staged/samplesheet.csv samplesheet_spatialvi.csv
   """

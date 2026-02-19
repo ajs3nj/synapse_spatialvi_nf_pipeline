@@ -102,12 +102,13 @@ Additional spatialvi options (e.g. `--spaceranger_reference`, `--spaceranger_pro
 
 ## Outputs
 
-- **Staging (all runs):** The staged FASTQ tarball `{sample}_fastqs.tar.gz`, image file, and spatialvi samplesheet are published to `{outdir}/staging/` (similar to [nf-synapse SYNSTAGE](https://github.com/Sage-Bionetworks-Workflows/nf-synapse)). Paths in the samplesheet are relative so you can run spatialvi from that directory if needed.
+- **Staging (all runs):** The staged FASTQ tarball `{sample}_fastqs.tar.gz`, image file, and spatialvi samplesheet are published to `{outdir}/staging/` (similar to [nf-synapse SYNSTAGE](https://github.com/Sage-Bionetworks-Workflows/nf-synapse)). Paths in the samplesheet are absolute so you can run spatialvi from any working directory.
 - **Full pipeline:** Per sample, a tarball `{sample}_spatialvi_results.tar.gz` containing the nf-core/spatialvi output (Space Ranger outputs, reports, data, etc.) is uploaded to the Synapse folder given by `results_parent_id` or the row’s `results_parent_id`.
-- **Test run (`--test_staging_only`):** The FASTQ tarball `{sample}_fastqs.tar.gz` is uploaded to Synapse, and a spatialvi-formatted samplesheet is written to `{outdir}/staging_test/samplesheet_spatialvi.csv`.
+- **Test run (`--test_staging_only`):** The FASTQ tarball `{sample}_fastqs.tar.gz` and the samplesheet `{sample}_samplesheet.csv` are uploaded to the same Synapse folder (given by `results_parent_id`). A copy of the samplesheet is also written to `{outdir}/staging_test/samplesheet_spatialvi.csv`.
 
 ## Notes
 
+- **Reusing staged data:** If `{outdir}/staging/` already contains the sample tarball and image from a previous run, the pipeline skips re-downloading and re-tarballing and reuses those files. Use the same `--outdir` when re-running with different options (e.g. spatialvi params) to avoid repeating download/stage steps.
 - The 4 FASTQ files are assumed to be in the order given in the samplesheet (e.g. read1, read2, index1, index2 or lane1/lane2). Names from Synapse are preserved when placed in the staged `fastq_dir`.
 - Space Ranger and the spatialvi pipeline have their own requirements (reference, probeset for FFPE/Cytassist). Use spatialvi’s `--spaceranger_reference` and `--spaceranger_probeset` as needed; you can wire these through params and the `RUN_SPATIALVI` script if required.
 - For Tower, ensure the compute environment has enough memory and that Docker (or Singularity) is available for the spatialvi sub-run.
