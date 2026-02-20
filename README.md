@@ -109,7 +109,7 @@ Additional spatialvi options (e.g. `--spaceranger_reference`, `--spaceranger_pro
 
 ## Notes
 
-- **Reusing staged data:** If `{outdir}/staging/` already contains the sample tarball and image from a previous run, the pipeline skips re-downloading and re-tarballing and reuses those files. Use the same `--outdir` when re-running with different options (e.g. spatialvi params) to avoid repeating download/stage steps.
+- **Reusing staged data:** If `{outdir}/staging/` already contains the sample tarball and image from a previous run, the pipeline skips re-downloading and re-tarballing and reuses those files. Use the same `--outdir` when re-running with different options (e.g. spatialvi params) to avoid repeating download/stage steps. When `outdir` is an S3 URI, reuse uses the AWS CLI (`aws s3 ls` / `aws s3 cp`); the DOWNLOAD_AND_STAGE container must have `aws` on the path for S3 reuse to work.
 - The 4 FASTQ files are all FASTQ files. Column order in the input samplesheet (e.g. read 1, read 2, index 1, index 2) is for your bookkeeping; the pipeline preserves Synapse filenames when staging. spatialvi/Space Ranger identifies reads by filename convention (e.g. `_R1_`, `_R2_`, `_I1_`, `_I2_` in the filename), not by order in the directory.
 - Space Ranger and the spatialvi pipeline have their own requirements (reference, probeset for FFPE/Cytassist). Use spatialvi’s `--spaceranger_reference` and `--spaceranger_probeset` as needed; you can wire these through params and the `RUN_SPATIALVI` script if required. For Cytassist samples, set `--cytassist` so the generated samplesheet uses the `cytaimage` column.
 - For Tower, ensure the compute environment has enough memory and that Docker (or Singularity) is available for the spatialvi sub-run.

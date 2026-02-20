@@ -37,15 +37,29 @@ process DOWNLOAD_AND_STAGE {
   set -e
   STAGING_ABS="${stagingPrefix}"
   # Reuse existing staged files if tarball and image already exist (e.g. re-run with tweaked options)
-  if [ -f "\${STAGING_ABS}/${sample}_fastqs.tar.gz" ]; then
-    imgname=\$(ls "\${STAGING_ABS}" 2>/dev/null | grep -v samplesheet | grep -v '\\.tar\\.gz\$' || true | head -1)
-    if [ -n "\$imgname" ] && [ -f "\${STAGING_ABS}/\${imgname}" ]; then
-      mkdir -p staged
-      cp "\${STAGING_ABS}/${sample}_fastqs.tar.gz" staged/
-      cp "\${STAGING_ABS}/\${imgname}" staged/
-      echo "sample,fastq_dir,${imageCol},slide,area" > staged/samplesheet.csv
-      echo "${sample},${stagingPrefix}/${sample}_fastqs.tar.gz,${stagingPrefix}/\${imgname},${slide},${area}" >> staged/samplesheet.csv
-      exit 0
+  if [[ "\${STAGING_ABS}" == s3://* ]]; then
+    if command -v aws >/dev/null 2>&1 && aws s3 ls "\${STAGING_ABS}/${sample}_fastqs.tar.gz" >/dev/null 2>&1; then
+      imgname=\$(aws s3 ls "\${STAGING_ABS}/" 2>/dev/null | awk '{print \$NF}' | grep -v samplesheet | grep -v '\\.tar\\.gz\$' | head -1)
+      if [ -n "\$imgname" ] && aws s3 ls "\${STAGING_ABS}/\${imgname}" >/dev/null 2>&1; then
+        mkdir -p staged
+        aws s3 cp "\${STAGING_ABS}/${sample}_fastqs.tar.gz" staged/
+        aws s3 cp "\${STAGING_ABS}/\${imgname}" staged/
+        echo "sample,fastq_dir,${imageCol},slide,area" > staged/samplesheet.csv
+        echo "${sample},${stagingPrefix}/${sample}_fastqs.tar.gz,${stagingPrefix}/\${imgname},${slide},${area}" >> staged/samplesheet.csv
+        exit 0
+      fi
+    fi
+  else
+    if [ -f "\${STAGING_ABS}/${sample}_fastqs.tar.gz" ]; then
+      imgname=\$(ls "\${STAGING_ABS}" 2>/dev/null | grep -v samplesheet | grep -v '\\.tar\\.gz\$' || true | head -1)
+      if [ -n "\$imgname" ] && [ -f "\${STAGING_ABS}/\${imgname}" ]; then
+        mkdir -p staged
+        cp "\${STAGING_ABS}/${sample}_fastqs.tar.gz" staged/
+        cp "\${STAGING_ABS}/\${imgname}" staged/
+        echo "sample,fastq_dir,${imageCol},slide,area" > staged/samplesheet.csv
+        echo "${sample},${stagingPrefix}/${sample}_fastqs.tar.gz,${stagingPrefix}/\${imgname},${slide},${area}" >> staged/samplesheet.csv
+        exit 0
+      fi
     fi
   fi
   # Download and stage from Synapse
