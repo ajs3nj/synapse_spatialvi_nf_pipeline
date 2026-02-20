@@ -84,6 +84,7 @@ process RUN_SPATIALVI {
 
   script:
   def refArg = params.spaceranger_reference ? "--spaceranger_reference ${params.spaceranger_reference}" : ''
+  def probesetArg = params.spaceranger_probeset ? "--spaceranger_probeset ${params.spaceranger_probeset}" : ''
   """
   set -e
   cp -r ${staged} ./workdir
@@ -95,6 +96,7 @@ process RUN_SPATIALVI {
     --input samplesheet.csv \\
     --outdir results \\
     ${refArg} \\
+    ${probesetArg} \\
     -profile ${params.spatialvi_profile}
   cp -r results ../results
   """
