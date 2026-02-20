@@ -21,19 +21,19 @@ process PREPARE_SYNSTAGE_INPUT {
   path("synstage_input.csv"), emit: synstage_input
 
   script:
-  """
+  '''
   awk -F',' 'NR==1{
     print "sample,fastq_1,fastq_2,fastq_3,fastq_4,image,slide,area,results_parent_id"
     next
   }
   {
-    gsub(\/^[ \\t]+|[ \\t]+$\/,"")
+    gsub("^[ \\t]+|[ \\t]+$", "")
     if (NF>=9)
-      print \$1",syn://"\$2",syn://"\$3",syn://"\$4",syn://"\$5",syn://"\$6","\$7","\$8","\$9
+      print $1",syn://"$2",syn://"$3",syn://"$4",syn://"$5",syn://"$6","$7","$8","$9
     else if (NF>=8)
-      print \$1",syn://"\$2",syn://"\$3",syn://"\$4",syn://"\$5",syn://"\$6","\$7","\$8","
-  }' ${samplesheet} > synstage_input.csv
-  """
+      print $1",syn://"$2",syn://"$3",syn://"$4",syn://"$5",syn://"$6","$7","$8","
+  }' ''' + samplesheet + ''' > synstage_input.csv
+  '''
 }
 
 // Run nf-synapse SYNSTAGE: stage all Synapse files to S3; updated CSV with S3 paths is at outdir/synstage/<input_basename>
