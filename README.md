@@ -12,16 +12,16 @@ Nextflow pipeline that follows the [nf-synapse meta-usage](https://github.com/Sa
 ## Quick start
 
 1. **Samplesheet**  
-   Create a CSV with one row per sample. Required columns:
+   Create a CSV with one row per sample. Use **`syn://` URIs** in the file columns (required by nf-synapse SYNSTAGE). Required columns:
 
    | Column | Description |
    |--------|-------------|
    | `sample` | Unique sample ID (must match FASTQ prefix expected by Space Ranger where applicable) |
-   | `synapse_id_fastq_1` | Synapse ID of first FASTQ file |
-   | `synapse_id_fastq_2` | Synapse ID of second FASTQ file |
-   | `synapse_id_fastq_3` | Synapse ID of third FASTQ file |
-   | `synapse_id_fastq_4` | Synapse ID of fourth FASTQ file |
-   | `synapse_id_image` | Synapse ID of the microscopy image (e.g. brightfield) |
+   | `fastq_1` | **syn://** URI of first FASTQ (e.g. `syn://syn28521174`) |
+   | `fastq_2` | **syn://** URI of second FASTQ |
+   | `fastq_3` | **syn://** URI of third FASTQ |
+   | `fastq_4` | **syn://** URI of fourth FASTQ |
+   | `image` | **syn://** URI of the microscopy image (e.g. brightfield) |
    | `slide` | Visium slide ID (e.g. `V11J26`) |
    | `area` | Slide area (e.g. `B1`), can be empty for unknown layout |
    | `results_parent_id` | (Optional) Synapse folder ID where results will be indexed. If omitted, use `--results_parent_id` in params. |
@@ -61,7 +61,7 @@ To verify **file staging from Synapse → tarball generation → upload to Synap
    nextflow run . --input ./samplesheet.csv --outdir s3://your-bucket/prefix --results_parent_id syn12345678 --test_staging_only -profile docker
    ```
 
-**PREPARE_SYNSTAGE_INPUT** → **RUN_SYNSTAGE** ([nf-synapse SYNSTAGE](https://github.com/Sage-Bionetworks-Workflows/nf-synapse)) → **MAKE_TARBALL** (publishDir to `{outdir}/staging/{sample}/`) → **INDEX_TO_SYNAPSE** ([nf-synapse SYNINDEX](https://github.com/Sage-Bionetworks-Workflows/nf-synapse)). No spatialvi or heavy compute.
+**RUN_SYNSTAGE** ([nf-synapse SYNSTAGE](https://github.com/Sage-Bionetworks-Workflows/nf-synapse); input CSV must have syn:// URIs) → **MAKE_TARBALL** (publishDir to `{outdir}/staging/{sample}/`) → **INDEX_TO_SYNAPSE** ([nf-synapse SYNINDEX](https://github.com/Sage-Bionetworks-Workflows/nf-synapse)). No spatialvi or heavy compute.
 
 ## Running on Seqera Tower
 

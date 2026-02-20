@@ -5,7 +5,8 @@ Designed for **Seqera Tower**. Outputs are stored in **S3** (`--outdir` must be 
 ## 1. Required inputs
 
 - [ ] **Samplesheet CSV**  
-  - Columns: `sample`, `synapse_id_fastq_1`–`synapse_id_fastq_4`, `synapse_id_image`, `slide`, `area`, (optional) `results_parent_id`.  
+  - Columns: `sample`, `fastq_1`, `fastq_2`, `fastq_3`, `fastq_4`, `image`, `slide`, `area`, (optional) `results_parent_id`.  
+  - File columns must use **syn://** URIs (e.g. `syn://syn28521174`).  
   - Available to Tower (uploaded to Tower data, or a URL Tower can reach).
 
 - [ ] **Synapse secret**  
@@ -48,19 +49,18 @@ Override in Tower params or a custom config if you need different paths or branc
 Matches [nf-synapse meta-usage](https://github.com/Sage-Bionetworks-Workflows/nf-synapse): **SYNSTAGE → make tarball → workflow → SYNINDEX**.
 
 **Full run:**  
-1. **PREPARE_SYNSTAGE_INPUT** – Builds a CSV with `syn://` URIs from your samplesheet.  
-2. **RUN_SYNSTAGE** – Runs [nf-synapse SYNSTAGE](https://github.com/Sage-Bionetworks-Workflows/nf-synapse) to stage all Synapse files to S3; updated CSV with S3 paths at `{outdir}/synstage/`.  
-3. **MAKE_TARBALL** – Per sample: copies the 5 staged files from S3 into the task work dir, packs 4 FASTQs into `{sample}_fastqs.tar.gz`, writes spatialvi samplesheet; publishDir writes to `{outdir}/staging/{sample}/`.  
-4. **RUN_SPATIALVI** – Runs nf-core/spatialvi with reference and probeset; publishDir writes results to `{outdir}/spatialvi_results/{sample}/`.  
-5. **INDEX_TO_SYNAPSE** – Runs [nf-synapse SYNINDEX](https://github.com/Sage-Bionetworks-Workflows/nf-synapse) to index that S3 prefix into Synapse.
+1. **RUN_SYNSTAGE** – Runs [nf-synapse SYNSTAGE](https://github.com/Sage-Bionetworks-Workflows/nf-synapse) on your samplesheet (must contain syn:// URIs); stages all files to S3; updated CSV at `{outdir}/synstage/`.  
+2. **MAKE_TARBALL** – Per sample: copies the 5 staged files from S3 into the task work dir, packs 4 FASTQs into `{sample}_fastqs.tar.gz`, writes spatialvi samplesheet; publishDir writes to `{outdir}/staging/{sample}/`.  
+3. **RUN_SPATIALVI** – Runs nf-core/spatialvi; publishDir writes results to `{outdir}/spatialvi_results/{sample}/`.  
+4. **INDEX_TO_SYNAPSE** – Runs [nf-synapse SYNINDEX](https://github.com/Sage-Bionetworks-Workflows/nf-synapse) to index that S3 prefix into Synapse.
 
 **Test run (`--test_staging_only`):**  
-1. **PREPARE_SYNSTAGE_INPUT** → **RUN_SYNSTAGE** → **MAKE_TARBALL** (same as above; staging written to S3 via publishDir).  
+1. **RUN_SYNSTAGE** → **MAKE_TARBALL** (staging written to S3 via publishDir).  
 2. **INDEX_TO_SYNAPSE** – Indexes staged files into Synapse (no spatialvi).
 
 ## 6. Quick sanity checks
 
-- [ ] Samplesheet has no header typos; column names match exactly (e.g. `synapse_id_fastq_1`, not `synapse_id_fastq1`).
+- [ ] Samplesheet has no header typos; column names match exactly (e.g. `fastq_1`, `image`), and file columns use **syn://** URIs.
 - [ ] Synapse IDs are valid and the token has access to those files and the results folder.
 - [ ] If using Cytassist, `--cytassist` (or `cytassist: true`) is set.
 - [ ] `outdir` is set to an S3 URI you have write access to from Tower (e.g. bucket in same AWS account as Tower).

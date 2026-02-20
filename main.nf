@@ -5,39 +5,11 @@ nextflow.enable.dsl = 2
 /*
  * Pipeline: Aligns with nf-synapse meta-usage (https://github.com/Sage-Bionetworks-Workflows/nf-synapse):
  *   SYNSTAGE (stage Synapse files to S3) -> make tarball -> run nf-core/spatialvi -> SYNINDEX (index S3 results to Synapse).
- * Samplesheet: CSV with Synapse IDs for 4 FASTQs and 1 image per sample.
+ * Samplesheet: CSV with syn:// URIs for 4 FASTQs and 1 image per sample (see README).
  * Compatible with Seqera Tower (use SYNAPSE_AUTH_TOKEN secret).
  */
 
-// Build a CSV with syn:// URIs for nf-synapse SYNSTAGE (extracts URIs and stages files to S3)
-process PREPARE_SYNSTAGE_INPUT {
-  tag "synstage_input"
-  container "alpine:3.19"
-  publishDir "${params.outdir}", pattern: "synstage_input.csv", mode: 'copy'
-
-  input:
-  path(samplesheet)
-
-  output:
-  path("synstage_input.csv"), emit: synstage_input
-
-  script:
-  '''
-  awk -F',' 'NR==1{
-    print "sample,fastq_1,fastq_2,fastq_3,fastq_4,image,slide,area,results_parent_id"
-    next
-  }
-  {
-    gsub("^[ \\t]+|[ \\t]+$", "")
-    if (NF>=9)
-      print $1",syn://"$2",syn://"$3",syn://"$4",syn://"$5",syn://"$6","$7","$8","$9
-    else if (NF>=8)
-      print $1",syn://"$2",syn://"$3",syn://"$4",syn://"$5",syn://"$6","$7","$8","
-  }' ''' + samplesheet + ''' > synstage_input.csv
-  '''
-}
-
-// Run nf-synapse SYNSTAGE: stage all Synapse files to S3; updated CSV with S3 paths is at outdir/synstage/<input_basename>
+// Run nf-synapse SYNSTAGE: stage all Synapse files to S3; input CSV must contain syn:// URIs in file columns
 // See https://github.com/Sage-Bionetworks-Workflows/nf-synapse
 process RUN_SYNSTAGE {
   tag "synstage"
@@ -45,20 +17,20 @@ process RUN_SYNSTAGE {
   secret "SYNAPSE_AUTH_TOKEN"
 
   input:
-  path(synstage_input)
+  path(samplesheet)
 
   output:
   path("staged_samplesheet.csv"), emit: staged_csv
 
   script:
   def outdirNorm = params.outdir.toString().replaceAll(/\/+$/, '')
-  def input_basename = synstage_input.name
+  def input_basename = samplesheet.name
   """
   nextflow run Sage-Bionetworks-Workflows/nf-synapse \\
     -profile docker \\
     -name synstage \\
     --entry synstage \\
-    --input ${synstage_input} \\
+    --input ${samplesheet} \\
     --outdir "${outdirNorm}"
   aws s3 cp "${outdirNorm}/synstage/${input_basename}" staged_samplesheet.csv
   """
@@ -175,16 +147,14 @@ workflow {
     exit 1, "Outputs are stored in S3. Please set --outdir to an S3 URI (e.g. s3://your-bucket/prefix)."
   }
 
-  samplesheet_path = file(params.input, checkIfExists: true)
-  sample_rows = Channel
-    .fromPath(params.input, checkIfExists: true)
+  // Samplesheet must contain syn:// URIs in file columns (sample, fastq_1..fastq_4, image, slide, area, results_parent_id)
+  samplesheet_ch = Channel.fromPath(params.input, checkIfExists: true)
+  sample_metas = Channel.fromPath(params.input, checkIfExists: true)
     .splitCsv(header: true, strip: true)
-    .map { row -> parse_row(row) }
-  sample_metas = sample_rows.map { meta, ids -> meta }
+    .map { row -> meta_from_row(row) }
 
   // 1. SYNSTAGE: stage Synapse files to S3 (nf-synapse)
-  PREPARE_SYNSTAGE_INPUT(samplesheet_path)
-  RUN_SYNSTAGE(PREPARE_SYNSTAGE_INPUT.out.synstage_input)
+  RUN_SYNSTAGE(samplesheet_ch)
   // 2. Make tarball per sample from staged S3 paths
   make_tarball_input = RUN_SYNSTAGE.out.staged_csv.combine(sample_metas).map { csv, meta -> tuple(meta, csv) }
   MAKE_TARBALL(make_tarball_input)
@@ -197,19 +167,12 @@ workflow {
   }
 }
 
-// Parse one CSV row into meta map and list of 5 synapse IDs [f1,f2,f3,f4,image]
-def parse_row(row) {
+// Extract meta from samplesheet row (samplesheet has syn:// URIs in fastq_1..fastq_4, image)
+def meta_from_row(row) {
   def meta = [:]
   meta.sample    = row.sample
   meta.slide     = row.slide
   meta.area      = row.area ?: ''
   meta.results_parent_id = row.results_parent_id ?: params.results_parent_id
-  def ids = [
-    row.synapse_id_fastq_1,
-    row.synapse_id_fastq_2,
-    row.synapse_id_fastq_3,
-    row.synapse_id_fastq_4,
-    row.synapse_id_image
-  ]
-  return tuple(meta, ids)
+  return meta
 }
