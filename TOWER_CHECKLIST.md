@@ -50,7 +50,7 @@ Matches [nf-synapse meta-usage](https://github.com/Sage-Bionetworks-Workflows/nf
 **Full run:**  
 1. **PREPARE_SYNSTAGE_INPUT** – Builds a CSV with `syn://` URIs from your samplesheet.  
 2. **RUN_SYNSTAGE** – Runs [nf-synapse SYNSTAGE](https://github.com/Sage-Bionetworks-Workflows/nf-synapse) to stage all Synapse files to S3; updated CSV with S3 paths at `{outdir}/synstage/`.  
-3. **MAKE_TARBALL** – Per sample: copies the 5 staged files from S3 into the task work dir (S3 is the only storage; tar needs local paths), packs 4 FASTQs into `{sample}_fastqs.tar.gz`, writes spatialvi samplesheet; publishDir writes to `{outdir}/staging/{sample}/`.  
+3. **MAKE_TARBALL** – Per sample: copies the 5 staged files from S3 into the task work dir, packs 4 FASTQs into `{sample}_fastqs.tar.gz`, writes spatialvi samplesheet; publishDir writes to `{outdir}/staging/{sample}/`.  
 4. **RUN_SPATIALVI** – Runs nf-core/spatialvi with reference and probeset; publishDir writes results to `{outdir}/spatialvi_results/{sample}/`.  
 5. **INDEX_TO_SYNAPSE** – Runs [nf-synapse SYNINDEX](https://github.com/Sage-Bionetworks-Workflows/nf-synapse) to index that S3 prefix into Synapse.
 

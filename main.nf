@@ -12,6 +12,7 @@ nextflow.enable.dsl = 2
 // Build a CSV with syn:// URIs for nf-synapse SYNSTAGE (extracts URIs and stages files to S3)
 process PREPARE_SYNSTAGE_INPUT {
   tag "synstage_input"
+  container "alpine:3.19"
   publishDir "${params.outdir}", pattern: "synstage_input.csv", mode: 'copy'
 
   input:
