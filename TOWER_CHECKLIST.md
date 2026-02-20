@@ -45,15 +45,18 @@ Override in Tower params or a custom config if you need different paths or branc
 
 ## 5. Pipeline flow
 
+Matches [nf-synapse meta-usage](https://github.com/Sage-Bionetworks-Workflows/nf-synapse): **SYNSTAGE → make tarball → workflow → SYNINDEX**.
+
 **Full run:**  
-1. **DOWNLOAD_AND_STAGE** – Downloads 5 files per sample, builds `{sample}_fastqs.tar.gz` and samplesheet, publishes to `{outdir}/staging/{sample}/`.  
-2. **RUN_SPATIALVI** – Runs nf-core/spatialvi with reference and probeset.  
-3. **UPLOAD_RESULTS_TO_S3** – Uploads full spatialvi results to `{outdir}/spatialvi_results/{sample}/`.  
-4. **INDEX_TO_SYNAPSE** – Runs [nf-synapse SYNINDEX](https://github.com/Sage-Bionetworks-Workflows/nf-synapse) to index that S3 prefix into Synapse (full folder structure).
+1. **PREPARE_SYNSTAGE_INPUT** – Builds a CSV with `syn://` URIs from your samplesheet.  
+2. **RUN_SYNSTAGE** – Runs [nf-synapse SYNSTAGE](https://github.com/Sage-Bionetworks-Workflows/nf-synapse) to stage all Synapse files to S3; updated CSV with S3 paths at `{outdir}/synstage/`.  
+3. **MAKE_TARBALL** – Per sample: copies the 5 staged files from S3 into the task work dir (S3 is the only storage; tar needs local paths), packs 4 FASTQs into `{sample}_fastqs.tar.gz`, writes spatialvi samplesheet; publishDir writes to `{outdir}/staging/{sample}/`.  
+4. **RUN_SPATIALVI** – Runs nf-core/spatialvi with reference and probeset; publishDir writes results to `{outdir}/spatialvi_results/{sample}/`.  
+5. **INDEX_TO_SYNAPSE** – Runs [nf-synapse SYNINDEX](https://github.com/Sage-Bionetworks-Workflows/nf-synapse) to index that S3 prefix into Synapse.
 
 **Test run (`--test_staging_only`):**  
-1. **DOWNLOAD_AND_STAGE** – Same as above; publishes to `{outdir}/staging/{sample}/`.  
-2. **INDEX_STAGING_TO_SYNAPSE** – Runs SYNINDEX on `{outdir}/staging/{sample}/` so all staged files (tarball, image, samplesheet) are indexed into Synapse at once.
+1. **PREPARE_SYNSTAGE_INPUT** → **RUN_SYNSTAGE** → **MAKE_TARBALL** (same as above; staging written to S3 via publishDir).  
+2. **INDEX_TO_SYNAPSE** – Indexes staged files into Synapse (no spatialvi).
 
 ## 6. Quick sanity checks
 
