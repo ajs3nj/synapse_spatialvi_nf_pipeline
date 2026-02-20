@@ -13,7 +13,7 @@ nextflow.enable.dsl = 2
 // See https://github.com/Sage-Bionetworks-Workflows/nf-synapse
 process RUN_SYNSTAGE {
   tag "synstage"
-  container "nextflow/nextflow:24.10"
+  container "${params.nextflow_container}"
   secret "SYNAPSE_AUTH_TOKEN"
 
   input:
@@ -81,7 +81,7 @@ process MAKE_TARBALL {
 // publishDir writes results directly to S3 so SYNINDEX can index without a separate upload step
 process RUN_SPATIALVI {
   tag "${meta.sample}"
-  container "nextflow/nextflow:24.10"
+  container "${params.nextflow_container}"
   cpus 8
   memory 32.GB
   time '7d'
@@ -117,7 +117,7 @@ process RUN_SPATIALVI {
 // See https://github.com/Sage-Bionetworks-Workflows/nf-synapse
 process INDEX_TO_SYNAPSE {
   tag "${meta.sample}"
-  container "nextflow/nextflow:24.10"
+  container "${params.nextflow_container}"
   secret "SYNAPSE_AUTH_TOKEN"
 
   input:
