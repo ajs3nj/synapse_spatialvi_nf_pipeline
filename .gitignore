@@ -1,7 +1,6 @@
 # Nextflow
 .nextflow*
 work/
-singularity_cache/
 nf-core-spatialvi/
 
 # IDE / OS

@@ -1,7 +1,9 @@
 # Example params for spatialvi_nf_pipeline
 # Use: nextflow run . -params-file examples/params.yml -profile docker
+# outdir must be an S3 URI (where outputs are stored).
 
 input: "samplesheet.csv"
-results_parent_id: "syn99999999"   # Synapse folder for result tarballs
-spatialvi_pipeline: "sagebio-ada/spatialvi"  # Sage Bionetworks fork
-spatialvi_release: "dev"          # branch or tag (e.g. dev, main, 1.0.0)
+outdir: "s3://your-bucket/your-prefix"   # required; staging and results go here
+results_parent_id: "syn99999999"         # Synapse folder where results are indexed
+spatialvi_pipeline: "sagebio-ada/spatialvi"
+spatialvi_release: "dev"
