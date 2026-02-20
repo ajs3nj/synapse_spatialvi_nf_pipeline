@@ -11,6 +11,7 @@ nextflow.enable.dsl = 2
 
 // Run nf-synapse SYNSTAGE: stage all Synapse files to S3; input CSV must contain syn:// URIs in file columns
 // See https://github.com/Sage-Bionetworks-Workflows/nf-synapse
+// nf-synapse defaults to 4 cpus for download-label processes; we override to 2 so it runs in typical Tower alloc
 process RUN_SYNSTAGE {
   tag "synstage"
   container "${params.nextflow_container}"
@@ -26,12 +27,14 @@ process RUN_SYNSTAGE {
   def outdirNorm = params.outdir.toString().replaceAll(/\/+$/, '')
   def input_basename = samplesheet.name
   """
+  echo 'process { withLabel: "download" { cpus = 2; memory = "4 GB" } }' > nf_synapse_override.config
   nextflow run Sage-Bionetworks-Workflows/nf-synapse \\
     -profile docker \\
     -name synstage \\
     --entry synstage \\
     --input ${samplesheet} \\
-    --outdir "${outdirNorm}"
+    --outdir "${outdirNorm}" \\
+    -c nf_synapse_override.config
   aws s3 cp "${outdirNorm}/synstage/${input_basename}" staged_samplesheet.csv
   """
 }
