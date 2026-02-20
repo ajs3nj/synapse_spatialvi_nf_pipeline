@@ -2,7 +2,7 @@
 
 Nextflow pipeline that stages **4 FASTQ files** and **1 image file** from Synapse, runs the [Sage Bionetworks spatialvi fork](https://github.com/sagebio-ada/spatialvi) (Visium spatial transcriptomics, forked from nf-core/spatialvi), and uploads result tarballs back to Synapse. Designed to run on **Seqera Tower**.
 
-Pattern is similar to [Sage-Bionetworks-Workflows/nf-vcf2maf](https://github.com/Sage-Bionetworks-Workflows/nf-vcf2maf): Synapse → stage → run pipeline → index results to Synapse.
+Pattern is similar to [Sage-Bionetworks-Workflows/nf-vcf2maf](https://github.com/Sage-Bionetworks-Workflows/nf-vcf2maf): Synapse → run pipeline → Synapse.
 
 ## Requirements
 
@@ -53,7 +53,7 @@ Pattern is similar to [Sage-Bionetworks-Workflows/nf-vcf2maf](https://github.com
 
 ## Staging-only test
 
-To verify **file staging → tarball generation → upload to Synapse** without running spatialvi (faster, smaller test):
+To verify **file staging from Synapse → tarball generation → upload to Synapse** without running spatialvi (faster, smaller test):
 
 1. Use a samplesheet with **one sample** and real Synapse IDs for the 4 FASTQs and 1 image.
 2. Set **`--results_parent_id`** (or `results_parent_id` in the CSV) to the folder where you want the FASTQ tarball uploaded.
@@ -110,7 +110,7 @@ Additional spatialvi options (e.g. `--spaceranger_reference`, `--spaceranger_pro
 ## Notes
 
 - **Reusing staged data:** If `{outdir}/staging/` already contains the sample tarball and image from a previous run, the pipeline skips re-downloading and re-tarballing and reuses those files. Use the same `--outdir` when re-running with different options (e.g. spatialvi params) to avoid repeating download/stage steps.
-- The 4 FASTQ files are assumed to be in the order given in the samplesheet (e.g. read1, read2, index1, index2 or lane1/lane2). Names from Synapse are preserved when placed in the staged `fastq_dir`.
+- The 4 FASTQ files are all FASTQ files. Column order in the input samplesheet (e.g. read 1, read 2, index 1, index 2) is for your bookkeeping; the pipeline preserves Synapse filenames when staging. spatialvi/Space Ranger identifies reads by filename convention (e.g. `_R1_`, `_R2_`, `_I1_`, `_I2_` in the filename), not by order in the directory.
 - Space Ranger and the spatialvi pipeline have their own requirements (reference, probeset for FFPE/Cytassist). Use spatialvi’s `--spaceranger_reference` and `--spaceranger_probeset` as needed; you can wire these through params and the `RUN_SPATIALVI` script if required. For Cytassist samples, set `--cytassist` so the generated samplesheet uses the `cytaimage` column.
 - For Tower, ensure the compute environment has enough memory and that Docker (or Singularity) is available for the spatialvi sub-run.
 - The pipeline uses the [sagebio-ada/spatialvi](https://github.com/sagebio-ada/spatialvi) fork by default; override `--spatialvi_pipeline` to use another repo (e.g. `nf-core/spatialvi`).
