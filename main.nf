@@ -27,7 +27,7 @@ process PREPARE_SYNSTAGE_INPUT {
     next
   }
   {
-    gsub(/^[ \\t]+|[ \\t]+$/,"")
+    gsub(\/^[ \\t]+|[ \\t]+$\/,"")
     if (NF>=9)
       print \$1",syn://"\$2",syn://"\$3",syn://"\$4",syn://"\$5",syn://"\$6","\$7","\$8","\$9
     else if (NF>=8)
@@ -64,7 +64,7 @@ process RUN_SYNSTAGE {
 }
 
 // From SYNSTAGE output CSV (S3 paths per sample): copy the 5 staged files from S3 into the task work dir
-// (S3 is the only storage; tar needs local paths), pack 4 FASTQs into tarball, write spatialvi samplesheet.
+// Pack 4 FASTQs into tarball, write spatialvi samplesheet.
 // publishDir writes directly to S3 so SYNINDEX can index without a separate upload step.
 process MAKE_TARBALL {
   tag "${meta.sample}"
