@@ -30,8 +30,9 @@ process DOWNLOAD_AND_STAGE {
   def sample = meta.sample
   def slide = meta.slide
   def area = meta.area ?: ''
-  def outdirStr = params.outdir.toString()
-  def stagingPrefix = outdirStr.startsWith('s3://') ? "${outdirStr}/staging" : file("${params.outdir}/staging").toAbsolutePath().toString()
+  def outdirNorm = params.outdir.toString().replaceAll(/\/+$/, '')
+  def stagingPrefix = outdirNorm.startsWith('s3://') ? "${outdirNorm}/staging" : file("${outdirNorm}/staging").toAbsolutePath().toString()
+  def imageCol = params.cytassist ? 'cytaimage' : 'image'
   """
   set -e
   STAGING_ABS="${stagingPrefix}"
@@ -42,7 +43,7 @@ process DOWNLOAD_AND_STAGE {
       mkdir -p staged
       cp "\${STAGING_ABS}/${sample}_fastqs.tar.gz" staged/
       cp "\${STAGING_ABS}/\${imgname}" staged/
-      echo "sample,fastq_dir,image,slide,area" > staged/samplesheet.csv
+      echo "sample,fastq_dir,${imageCol},slide,area" > staged/samplesheet.csv
       echo "${sample},${stagingPrefix}/${sample}_fastqs.tar.gz,${stagingPrefix}/\${imgname},${slide},${area}" >> staged/samplesheet.csv
       exit 0
     fi
@@ -61,8 +62,8 @@ process DOWNLOAD_AND_STAGE {
   tar -czvf staged/${sample}_fastqs.tar.gz -C staged/fastqs .
   rm -rf staged/fastqs
   imgname=\$(ls staged/ | grep -v '\\.tar\\.gz\$' || true | head -1)
-  # Absolute paths to published staging dir so samplesheet works from any cwd
-  echo "sample,fastq_dir,image,slide,area" > staged/samplesheet.csv
+  # Absolute paths to published staging dir; header uses cytaimage for Cytassist, image for brightfield
+  echo "sample,fastq_dir,${imageCol},slide,area" > staged/samplesheet.csv
   echo "${sample},${stagingPrefix}/${sample}_fastqs.tar.gz,${stagingPrefix}/\${imgname},${slide},${area}" >> staged/samplesheet.csv
   """
 }

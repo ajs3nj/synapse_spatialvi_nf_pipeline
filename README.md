@@ -96,6 +96,7 @@ The test also writes a **spatialvi-formatted samplesheet** to `{outdir}/staging_
 | `spatialvi_pipeline` | SpatialVI pipeline repo (GitHub `org/repo`) | `sagebio-ada/spatialvi` |
 | `spatialvi_release` | Branch or tag to run (e.g. `dev`, `main`) | `dev` |
 | `spatialvi_profile` | Profile for spatialvi sub-run: `docker` or `singularity` | `docker` |
+| `cytassist` | If true, use `cytaimage` column (Cytassist tissue image) instead of `image` (brightfield) in the spatialvi samplesheet; see [nf-core/spatialvi usage](https://nf-co.re/spatialvi/dev/docs/usage/) | false |
 | `outdir` | Local outdir for spatialvi (inside process) | `./results` |
 
 Additional spatialvi options (e.g. `--spaceranger_reference`, `--spaceranger_probeset`) can be passed via `nextflow.config` or Tower parameter overrides if you add them to the `RUN_SPATIALVI` process.
@@ -110,7 +111,7 @@ Additional spatialvi options (e.g. `--spaceranger_reference`, `--spaceranger_pro
 
 - **Reusing staged data:** If `{outdir}/staging/` already contains the sample tarball and image from a previous run, the pipeline skips re-downloading and re-tarballing and reuses those files. Use the same `--outdir` when re-running with different options (e.g. spatialvi params) to avoid repeating download/stage steps.
 - The 4 FASTQ files are assumed to be in the order given in the samplesheet (e.g. read1, read2, index1, index2 or lane1/lane2). Names from Synapse are preserved when placed in the staged `fastq_dir`.
-- Space Ranger and the spatialvi pipeline have their own requirements (reference, probeset for FFPE/Cytassist). Use spatialvi’s `--spaceranger_reference` and `--spaceranger_probeset` as needed; you can wire these through params and the `RUN_SPATIALVI` script if required.
+- Space Ranger and the spatialvi pipeline have their own requirements (reference, probeset for FFPE/Cytassist). Use spatialvi’s `--spaceranger_reference` and `--spaceranger_probeset` as needed; you can wire these through params and the `RUN_SPATIALVI` script if required. For Cytassist samples, set `--cytassist` so the generated samplesheet uses the `cytaimage` column.
 - For Tower, ensure the compute environment has enough memory and that Docker (or Singularity) is available for the spatialvi sub-run.
 - The pipeline uses the [sagebio-ada/spatialvi](https://github.com/sagebio-ada/spatialvi) fork by default; override `--spatialvi_pipeline` to use another repo (e.g. `nf-core/spatialvi`).
 
