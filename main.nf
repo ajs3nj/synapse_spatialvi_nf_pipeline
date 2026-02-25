@@ -111,6 +111,9 @@ process INDEX_STAGING_TO_SYNAPSE {
   def s3_prefix = "${outdirNorm}/staging/${meta.sample}"
   def parent = meta.results_parent_id ?: params.results_parent_id
   """
+  # Store the secret for the inner nextflow run
+  nextflow secrets set SYNAPSE_AUTH_TOKEN "\$SYNAPSE_AUTH_TOKEN"
+
   nextflow run Sage-Bionetworks-Workflows/nf-synapse \\
     -profile docker \\
     --entry synindex \\
@@ -160,6 +163,9 @@ process INDEX_TO_SYNAPSE {
   def s3_prefix = "${outdirNorm}/spatialvi_results/${meta.sample}"
   def parent = meta.results_parent_id ?: params.results_parent_id
   """
+  # Store the secret for the inner nextflow run
+  nextflow secrets set SYNAPSE_AUTH_TOKEN "\$SYNAPSE_AUTH_TOKEN"
+
   nextflow run Sage-Bionetworks-Workflows/nf-synapse \\
     -profile docker \\
     --entry synindex \\
