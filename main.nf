@@ -60,7 +60,7 @@ process DOWNLOAD_AND_STAGE {
 // Space Ranger requires 64 GB min (128 GB recommended), 8+ CPUs
 process RUN_SPATIALVI {
   tag "${meta.sample}"
-  container "nextflow/nextflow:24.04.4"
+  container "nextflow/nextflow:25.04.3"
   cpus 16
   memory '128 GB'
   time '7d'
