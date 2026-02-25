@@ -82,13 +82,21 @@ process RUN_SPATIALVI {
   cd workdir
   WORKDIR=\$(pwd)
   awk -v w="\$WORKDIR" -F',' 'NR==1{print;next}{ \$2=w"/"\$2; \$3=w"/"\$3; print }' OFS=',' samplesheet.csv > samplesheet_fullpath.csv && mv samplesheet_fullpath.csv samplesheet.csv
+
+  # Create config to use Wave with container strategy (not conda)
+  cat > spatialvi.config << 'INNERCONFIG'
+wave.enabled = true
+wave.strategy = 'container'
+docker.enabled = true
+INNERCONFIG
+
   nextflow run ${pipeline} \\
     -r ${release} \\
     --input samplesheet.csv \\
     --outdir results \\
     ${refArg} \\
     ${probesetArg} \\
-    -profile wave
+    -c spatialvi.config
   cp -r results ../results
   """
 }
