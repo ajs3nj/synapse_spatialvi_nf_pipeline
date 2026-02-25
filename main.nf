@@ -57,7 +57,7 @@ process DOWNLOAD_AND_STAGE {
 // Run nf-core/spatialvi on staged data
 process RUN_SPATIALVI {
   tag "${meta.sample}"
-  container "nextflowio/nextflow:docker"
+  container "nextflow/nextflow:24.04.4"
   cpus 8
   memory 32.GB
   time '7d'
@@ -91,7 +91,7 @@ process RUN_SPATIALVI {
 // Index staged files (tarball, image, samplesheet) to Synapse via SYNINDEX (test run)
 process INDEX_STAGING_TO_SYNAPSE {
   tag "${meta.sample}"
-  container "nextflowio/nextflow:docker"
+  container "nextflow/nextflow:24.04.4"
   secret "SYNAPSE_AUTH_TOKEN"
   when: params.test_staging_only
 
@@ -137,7 +137,7 @@ process UPLOAD_RESULTS_TO_S3 {
 // See https://github.com/Sage-Bionetworks-Workflows/nf-synapse
 process INDEX_TO_SYNAPSE {
   tag "${meta.sample}"
-  container "nextflowio/nextflow:docker"
+  container "nextflow/nextflow:24.04.4"
   secret "SYNAPSE_AUTH_TOKEN"
 
   input:
