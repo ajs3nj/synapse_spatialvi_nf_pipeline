@@ -13,7 +13,9 @@ process DOWNLOAD_AND_STAGE {
   tag "${meta.sample}"
   container "sagebionetworks/synapsepythonclient:v2.6.0"
   secret "SYNAPSE_AUTH_TOKEN"
-  publishDir "${params.outdir}/staging", path: { "${task.tag}" }, mode: 'copy'
+  publishDir "${params.outdir}/staging", pattern: "staged/*", saveAs: { "${meta.sample}/${file(it).name}" }, mode: 'copy'
+  cpus 2
+  memory '4 GB'
 
   input:
   tuple val(meta), val(synapse_ids)
@@ -55,11 +57,12 @@ process DOWNLOAD_AND_STAGE {
 }
 
 // Run nf-core/spatialvi on staged data
+// Space Ranger requires 64 GB min (128 GB recommended), 8+ CPUs
 process RUN_SPATIALVI {
   tag "${meta.sample}"
   container "nextflow/nextflow:24.04.4"
-  cpus 8
-  memory 32.GB
+  cpus 16
+  memory '128 GB'
   time '7d'
 
   input:
@@ -93,6 +96,8 @@ process INDEX_STAGING_TO_SYNAPSE {
   tag "${meta.sample}"
   container "nextflow/nextflow:24.04.4"
   secret "SYNAPSE_AUTH_TOKEN"
+  cpus 2
+  memory '4 GB'
   when: params.test_staging_only
 
   input:
@@ -118,6 +123,8 @@ process INDEX_STAGING_TO_SYNAPSE {
 process UPLOAD_RESULTS_TO_S3 {
   tag "${meta.sample}"
   container "amazon/aws-cli:latest"
+  cpus 2
+  memory '4 GB'
 
   input:
   tuple val(meta), path("results")
@@ -139,6 +146,8 @@ process INDEX_TO_SYNAPSE {
   tag "${meta.sample}"
   container "nextflow/nextflow:24.04.4"
   secret "SYNAPSE_AUTH_TOKEN"
+  cpus 2
+  memory '4 GB'
 
   input:
   tuple val(meta), path(results)
