@@ -16,6 +16,8 @@ process RUN_SYNSTAGE {
   tag "synstage"
   container "${params.nextflow_container}"
   secret "SYNAPSE_AUTH_TOKEN"
+  cpus 2
+  memory '4 GB'
 
   input:
   path(samplesheet)
@@ -27,7 +29,7 @@ process RUN_SYNSTAGE {
   def outdirNorm = params.outdir.toString().replaceAll(/\/+$/, '')
   def input_basename = samplesheet.name
   """
-  echo 'process { withLabel: "download" { cpus = 2; memory = "4 GB" } }' > nf_synapse_override.config
+  echo 'process { withLabel: "download" { cpus = 1; memory = "1 GB" } }' > nf_synapse_override.config
   nextflow run Sage-Bionetworks-Workflows/nf-synapse \\
     -profile docker \\
     -name synstage \\
