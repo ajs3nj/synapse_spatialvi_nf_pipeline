@@ -88,7 +88,7 @@ process RUN_SPATIALVI {
     --outdir results \\
     ${refArg} \\
     ${probesetArg} \\
-    -profile docker
+    -profile wave
   cp -r results ../results
   """
 }
