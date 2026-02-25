@@ -72,6 +72,8 @@ process RUN_SPATIALVI {
   tuple val(meta), path("results"), emit: results
 
   script:
+  def pipeline = params.spatialvi_pipeline ?: 'sagebio-ada/spatialvi'
+  def release = params.spatialvi_release ?: 'dev'
   def refArg = params.spaceranger_reference ? "--spaceranger_reference ${params.spaceranger_reference}" : ''
   def probesetArg = params.spaceranger_probeset ? "--spaceranger_probeset ${params.spaceranger_probeset}" : ''
   """
@@ -80,8 +82,8 @@ process RUN_SPATIALVI {
   cd workdir
   WORKDIR=\$(pwd)
   awk -v w="\$WORKDIR" -F',' 'NR==1{print;next}{ \$2=w"/"\$2; \$3=w"/"\$3; print }' OFS=',' samplesheet.csv > samplesheet_fullpath.csv && mv samplesheet_fullpath.csv samplesheet.csv
-  nextflow run ${params.spatialvi_pipeline} \\
-    -r ${params.spatialvi_release} \\
+  nextflow run ${pipeline} \\
+    -r ${release} \\
     --input samplesheet.csv \\
     --outdir results \\
     ${refArg} \\
