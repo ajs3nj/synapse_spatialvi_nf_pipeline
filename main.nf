@@ -91,14 +91,13 @@ process RUN_SPATIALVI {
   """
 }
 
-// Index staged files (tarball, image, samplesheet) to Synapse via SYNINDEX (test run)
+// Upload staged files to Synapse (test run) using synapse store
 process INDEX_STAGING_TO_SYNAPSE {
   tag "${meta.sample}"
-  container "nextflow/nextflow:24.04.4"
+  container "sagebionetworks/synapsepythonclient:v2.6.0"
   secret "SYNAPSE_AUTH_TOKEN"
   cpus 2
   memory '4 GB'
-  when: params.test_staging_only
 
   input:
   tuple val(meta), path(staged)
@@ -107,18 +106,12 @@ process INDEX_STAGING_TO_SYNAPSE {
   tuple val(meta), emit: indexed
 
   script:
-  def outdirNorm = params.outdir.toString().replaceAll(/\/+$/, '')
-  def s3_prefix = "${outdirNorm}/staging/${meta.sample}"
   def parent = meta.results_parent_id ?: params.results_parent_id
   """
-  # Store the secret for the inner nextflow run
-  nextflow secrets set SYNAPSE_AUTH_TOKEN "\$SYNAPSE_AUTH_TOKEN"
-
-  nextflow run Sage-Bionetworks-Workflows/nf-synapse \\
-    -profile docker \\
-    --entry synindex \\
-    --s3_prefix "${s3_prefix}" \\
-    --parent_id ${parent}
+  # Upload each file in staged/ to Synapse
+  for f in ${staged}/*; do
+    synapse store --parentId ${parent} "\$f"
+  done
   """
 }
 
@@ -143,11 +136,11 @@ process UPLOAD_RESULTS_TO_S3 {
   """
 }
 
-// Index the uploaded S3 results into Synapse using nf-synapse SYNINDEX (full folder structure, no tarball)
-// See https://github.com/Sage-Bionetworks-Workflows/nf-synapse
+// Upload spatialvi results to Synapse using synapse store
+// Uploads the entire results directory recursively
 process INDEX_TO_SYNAPSE {
   tag "${meta.sample}"
-  container "nextflow/nextflow:24.04.4"
+  container "sagebionetworks/synapsepythonclient:v2.6.0"
   secret "SYNAPSE_AUTH_TOKEN"
   cpus 2
   memory '4 GB'
@@ -159,18 +152,10 @@ process INDEX_TO_SYNAPSE {
   tuple val(meta), emit: indexed
 
   script:
-  def outdirNorm = params.outdir.toString().replaceAll(/\/+$/, '')
-  def s3_prefix = "${outdirNorm}/spatialvi_results/${meta.sample}"
   def parent = meta.results_parent_id ?: params.results_parent_id
   """
-  # Store the secret for the inner nextflow run
-  nextflow secrets set SYNAPSE_AUTH_TOKEN "\$SYNAPSE_AUTH_TOKEN"
-
-  nextflow run Sage-Bionetworks-Workflows/nf-synapse \\
-    -profile docker \\
-    --entry synindex \\
-    --s3_prefix "${s3_prefix}" \\
-    --parent_id ${parent}
+  # Upload entire results directory to Synapse (preserves folder structure)
+  synapse store --parentId ${parent} ${results}
   """
 }
 
