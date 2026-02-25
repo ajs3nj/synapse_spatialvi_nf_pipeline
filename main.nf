@@ -3,94 +3,64 @@
 nextflow.enable.dsl = 2
 
 /*
- * Pipeline: Aligns with nf-synapse meta-usage (https://github.com/Sage-Bionetworks-Workflows/nf-synapse):
- *   SYNSTAGE (stage Synapse files to S3) -> make tarball -> run nf-core/spatialvi -> SYNINDEX (index S3 results to Synapse).
- * Samplesheet: CSV with syn:// URIs for 4 FASTQs and 1 image per sample (see README).
+ * Pipeline: Stage FASTQ + image from Synapse -> run nf-core/spatialvi -> index results to Synapse.
+ * Samplesheet: CSV with Synapse IDs for 4 FASTQ files and 1 image per sample.
  * Compatible with Seqera Tower (use SYNAPSE_AUTH_TOKEN secret).
  */
 
-// Run nf-synapse SYNSTAGE: stage all Synapse files to S3; input CSV must contain syn:// URIs in file columns
-// See https://github.com/Sage-Bionetworks-Workflows/nf-synapse
-// nf-synapse defaults to 4 cpus for download-label processes; we override to 2 so it runs in typical Tower alloc
-process RUN_SYNSTAGE {
-  tag "synstage"
-  container "${params.nextflow_container}"
-  secret "SYNAPSE_AUTH_TOKEN"
-  cpus 2
-  memory '4 GB'
-
-  input:
-  path(samplesheet)
-
-  output:
-  path("staged_samplesheet.csv"), emit: staged_csv
-
-  script:
-  def outdirNorm = params.outdir.toString().replaceAll(/\/+$/, '')
-  def input_basename = samplesheet.name
-  """
-  echo 'process { withLabel: "download" { cpus = 1; memory = "1 GB" } }' > nf_synapse_override.config
-  nextflow run Sage-Bionetworks-Workflows/nf-synapse \\
-    -profile docker \\
-    -name synstage \\
-    --entry synstage \\
-    --input ${samplesheet} \\
-    --outdir "${outdirNorm}" \\
-    -c nf_synapse_override.config
-  aws s3 cp "${outdirNorm}/synstage/${input_basename}" staged_samplesheet.csv
-  """
-}
-
-// From SYNSTAGE output CSV (S3 paths per sample): copy the 5 staged files from S3 into the task work dir
-// Pack 4 FASTQs into tarball, write spatialvi samplesheet.
-// publishDir writes directly to S3 so SYNINDEX can index without a separate upload step.
-process MAKE_TARBALL {
+// Download all 5 Synapse files for one sample and stage for nf-core/spatialvi
+process DOWNLOAD_AND_STAGE {
   tag "${meta.sample}"
-  container "amazon/aws-cli:latest"
+  container "sagebionetworks/synapsepythonclient:v2.6.0"
+  secret "SYNAPSE_AUTH_TOKEN"
   publishDir "${params.outdir}/staging", path: { "${task.tag}" }, mode: 'copy'
 
   input:
-  tuple val(meta), path(staged_csv)
+  tuple val(meta), val(synapse_ids)
 
   output:
   tuple val(meta), path("staged"), emit: staged
 
   script:
+  def id1 = synapse_ids[0]
+  def id2 = synapse_ids[1]
+  def id3 = synapse_ids[2]
+  def id4 = synapse_ids[3]
+  def id_img = synapse_ids[4]
   def sample = meta.sample
   def slide = meta.slide
   def area = meta.area ?: ''
-  def imageCol = params.cytassist ? 'cytaimage' : 'image'
   def outdirNorm = params.outdir.toString().replaceAll(/\/+$/, '')
   def stagingPrefix = "${outdirNorm}/staging/${sample}"
+  def imageCol = params.cytassist ? 'cytaimage' : 'image'
   """
   set -e
   mkdir -p staged/fastqs
-  # Find this sample's row (skip header); assume sample is first column, then fastq_1..fastq_4, image
-  line=\$(awk -F',' -v s="${sample}" 'NR>1 && \$1==s {print; exit}' ${staged_csv})
-  f1=\$(echo "\$line" | cut -d',' -f2)
-  f2=\$(echo "\$line" | cut -d',' -f3)
-  f3=\$(echo "\$line" | cut -d',' -f4)
-  f4=\$(echo "\$line" | cut -d',' -f5)
-  img=\$(echo "\$line" | cut -d',' -f6)
-  for u in "\$f1" "\$f2" "\$f3" "\$f4"; do aws s3 cp "\$u" staged/fastqs/; done
-  aws s3 cp "\$img" staged/
+  synapse get ${id1} && mv \$(ls -t -p | grep -v / | head -1) staged/fastqs/
+  synapse get ${id2} && mv \$(ls -t -p | grep -v / | head -1) staged/fastqs/
+  synapse get ${id3} && mv \$(ls -t -p | grep -v / | head -1) staged/fastqs/
+  synapse get ${id4} && mv \$(ls -t -p | grep -v / | head -1) staged/fastqs/
+  synapse get ${id_img} && mv \$(ls -t -p | grep -v / | head -1) staged/
+  shopt -s nullglob
+  for f in staged/fastqs/*\\ *; do [ -e "\$f" ] && mv "\$f" "\${f// /_}"; done
+  for f in staged/*\\ *; do [ -e "\$f" ] && mv "\$f" "\${f// /_}"; done
+  # Pack FASTQs into a tarball with sample name as prefix (spatialvi accepts .tar.gz for fastq_dir)
   tar -czvf staged/${sample}_fastqs.tar.gz -C staged/fastqs .
   rm -rf staged/fastqs
-  imgname=\$(basename "\$img")
+  imgname=\$(ls staged/ | grep -v '\\.tar\\.gz\$' || true | head -1)
+  # Absolute paths to published staging dir; header uses cytaimage for Cytassist, image for brightfield
   echo "sample,fastq_dir,${imageCol},slide,area" > staged/samplesheet.csv
   echo "${sample},${stagingPrefix}/${sample}_fastqs.tar.gz,${stagingPrefix}/\${imgname},${slide},${area}" >> staged/samplesheet.csv
   """
 }
 
 // Run nf-core/spatialvi on staged data
-// publishDir writes results directly to S3 so SYNINDEX can index without a separate upload step
 process RUN_SPATIALVI {
   tag "${meta.sample}"
-  container "${params.nextflow_container}"
+  container "nextflowio/nextflow:docker"
   cpus 8
   memory 32.GB
   time '7d'
-  publishDir "${params.outdir}/spatialvi_results", path: { "${task.tag}" }, mode: 'copy'
 
   input:
   tuple val(meta), path(staged)
@@ -118,22 +88,67 @@ process RUN_SPATIALVI {
   """
 }
 
-// Index an S3 prefix into Synapse via nf-synapse SYNINDEX (files are already on S3 via publishDir)
-// See https://github.com/Sage-Bionetworks-Workflows/nf-synapse
-process INDEX_TO_SYNAPSE {
+// Index staged files (tarball, image, samplesheet) to Synapse via SYNINDEX (test run)
+process INDEX_STAGING_TO_SYNAPSE {
   tag "${meta.sample}"
-  container "${params.nextflow_container}"
+  container "nextflowio/nextflow:docker"
   secret "SYNAPSE_AUTH_TOKEN"
+  when: params.test_staging_only
 
   input:
-  tuple val(meta), val(s3_suffix)
+  tuple val(meta), path(staged)
 
   output:
   tuple val(meta), emit: indexed
 
   script:
   def outdirNorm = params.outdir.toString().replaceAll(/\/+$/, '')
-  def s3_prefix = "${outdirNorm}/${s3_suffix}/${meta.sample}"
+  def s3_prefix = "${outdirNorm}/staging/${meta.sample}"
+  def parent = meta.results_parent_id ?: params.results_parent_id
+  """
+  nextflow run Sage-Bionetworks-Workflows/nf-synapse \\
+    -profile docker \\
+    --entry synindex \\
+    --s3_prefix "${s3_prefix}" \\
+    --parent_id ${parent}
+  """
+}
+
+// Upload full spatialvi results directory to S3 (for indexing into Synapse via SYNINDEX)
+process UPLOAD_RESULTS_TO_S3 {
+  tag "${meta.sample}"
+  container "amazon/aws-cli:latest"
+
+  input:
+  tuple val(meta), path("results")
+
+  output:
+  tuple val(meta), path("results"), emit: uploaded
+
+  script:
+  def outdirNorm = params.outdir.toString().replaceAll(/\/+$/, '')
+  def s3_prefix = "${outdirNorm}/spatialvi_results/${meta.sample}"
+  """
+  aws s3 cp --recursive results/ "${s3_prefix}/"
+  """
+}
+
+// Index the uploaded S3 results into Synapse using nf-synapse SYNINDEX (full folder structure, no tarball)
+// See https://github.com/Sage-Bionetworks-Workflows/nf-synapse
+process INDEX_TO_SYNAPSE {
+  tag "${meta.sample}"
+  container "nextflowio/nextflow:docker"
+  secret "SYNAPSE_AUTH_TOKEN"
+
+  input:
+  tuple val(meta), path(results)
+
+  output:
+  tuple val(meta), emit: indexed
+
+  script:
+  def outdirNorm = params.outdir.toString().replaceAll(/\/+$/, '')
+  def s3_prefix = "${outdirNorm}/spatialvi_results/${meta.sample}"
   def parent = meta.results_parent_id ?: params.results_parent_id
   """
   nextflow run Sage-Bionetworks-Workflows/nf-synapse \\
@@ -152,32 +167,35 @@ workflow {
     exit 1, "Outputs are stored in S3. Please set --outdir to an S3 URI (e.g. s3://your-bucket/prefix)."
   }
 
-  // Samplesheet must contain syn:// URIs in file columns (sample, fastq_1..fastq_4, image, slide, area, results_parent_id)
-  samplesheet_ch = Channel.fromPath(params.input, checkIfExists: true)
-  sample_metas = Channel.fromPath(params.input, checkIfExists: true)
+  sample_rows = Channel
+    .fromPath(params.input, checkIfExists: true)
     .splitCsv(header: true, strip: true)
-    .map { row -> meta_from_row(row) }
+    .map { row -> parse_row(row) }
 
-  // 1. SYNSTAGE: stage Synapse files to S3 (nf-synapse)
-  RUN_SYNSTAGE(samplesheet_ch)
-  // 2. Make tarball per sample from staged S3 paths
-  make_tarball_input = RUN_SYNSTAGE.out.staged_csv.combine(sample_metas).map { csv, meta -> tuple(meta, csv) }
-  MAKE_TARBALL(make_tarball_input)
+  DOWNLOAD_AND_STAGE(sample_rows)
 
   if (params.test_staging_only) {
-    INDEX_TO_SYNAPSE(MAKE_TARBALL.out.staged.map { meta, staged -> tuple(meta, "staging") })
+    INDEX_STAGING_TO_SYNAPSE(DOWNLOAD_AND_STAGE.out.staged)
   } else {
-    RUN_SPATIALVI(MAKE_TARBALL.out.staged)
-    INDEX_TO_SYNAPSE(RUN_SPATIALVI.out.results.map { meta, results -> tuple(meta, "spatialvi_results") })
+    RUN_SPATIALVI(DOWNLOAD_AND_STAGE.out.staged)
+    UPLOAD_RESULTS_TO_S3(RUN_SPATIALVI.out.results)
+    INDEX_TO_SYNAPSE(UPLOAD_RESULTS_TO_S3.out.uploaded)
   }
 }
 
-// Extract meta from samplesheet row (samplesheet has syn:// URIs in fastq_1..fastq_4, image)
-def meta_from_row(row) {
+// Parse one CSV row into meta map and list of 5 synapse IDs [f1,f2,f3,f4,image]
+def parse_row(row) {
   def meta = [:]
   meta.sample    = row.sample
   meta.slide     = row.slide
   meta.area      = row.area ?: ''
   meta.results_parent_id = row.results_parent_id ?: params.results_parent_id
-  return meta
+  def ids = [
+    row.synapse_id_fastq_1,
+    row.synapse_id_fastq_2,
+    row.synapse_id_fastq_3,
+    row.synapse_id_fastq_4,
+    row.synapse_id_image
+  ]
+  return tuple(meta, ids)
 }

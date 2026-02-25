@@ -1,6 +1,8 @@
 # spatialvi_nf_pipeline
 
-Nextflow pipeline that follows the [nf-synapse meta-usage](https://github.com/Sage-Bionetworks-Workflows/nf-synapse) pattern: **SYNSTAGE** (stage Synapse files to S3) → **make tarball** → **run nf-core/spatialvi** → **SYNINDEX** (index S3 results back into Synapse). It stages **4 FASTQ files** and **1 image file** per sample from Synapse via [nf-synapse SYNSTAGE](https://github.com/Sage-Bionetworks-Workflows/nf-synapse), builds a FASTQ tarball and samplesheet, runs the [Sage Bionetworks spatialvi fork](https://github.com/sagebio-ada/spatialvi), then indexes full results into Synapse via [nf-synapse SYNINDEX](https://github.com/Sage-Bionetworks-Workflows/nf-synapse). Designed for **Seqera Tower**. All outputs are in **S3** — `--outdir` must be an S3 URI.
+Nextflow pipeline that stages **4 FASTQ files** and **1 image file** from Synapse, runs the [Sage Bionetworks spatialvi fork](https://github.com/sagebio-ada/spatialvi) (Visium spatial transcriptomics, forked from nf-core/spatialvi), uploads full results to S3, and indexes them into Synapse (full folder structure) via [nf-synapse SYNINDEX](https://github.com/Sage-Bionetworks-Workflows/nf-synapse). Designed to run on **Seqera Tower**. All outputs are stored in **S3** — `--outdir` must be an S3 URI.
+
+Pattern is similar to [Sage-Bionetworks-Workflows/nf-vcf2maf](https://github.com/Sage-Bionetworks-Workflows/nf-vcf2maf): Synapse → run pipeline → Synapse.
 
 ## Requirements
 
@@ -12,16 +14,16 @@ Nextflow pipeline that follows the [nf-synapse meta-usage](https://github.com/Sa
 ## Quick start
 
 1. **Samplesheet**  
-   Create a CSV with one row per sample. Use **`syn://` URIs** in the file columns (required by nf-synapse SYNSTAGE). Required columns:
+   Create a CSV with one row per sample. Required columns:
 
    | Column | Description |
    |--------|-------------|
    | `sample` | Unique sample ID (must match FASTQ prefix expected by Space Ranger where applicable) |
-   | `fastq_1` | **syn://** URI of first FASTQ (e.g. `syn://syn28521174`) |
-   | `fastq_2` | **syn://** URI of second FASTQ |
-   | `fastq_3` | **syn://** URI of third FASTQ |
-   | `fastq_4` | **syn://** URI of fourth FASTQ |
-   | `image` | **syn://** URI of the microscopy image (e.g. brightfield) |
+   | `synapse_id_fastq_1` | Synapse ID of first FASTQ file |
+   | `synapse_id_fastq_2` | Synapse ID of second FASTQ file |
+   | `synapse_id_fastq_3` | Synapse ID of third FASTQ file |
+   | `synapse_id_fastq_4` | Synapse ID of fourth FASTQ file |
+   | `synapse_id_image` | Synapse ID of the microscopy image (e.g. brightfield) |
    | `slide` | Visium slide ID (e.g. `V11J26`) |
    | `area` | Slide area (e.g. `B1`), can be empty for unknown layout |
    | `results_parent_id` | (Optional) Synapse folder ID where results will be indexed. If omitted, use `--results_parent_id` in params. |
@@ -61,7 +63,7 @@ To verify **file staging from Synapse → tarball generation → upload to Synap
    nextflow run . --input ./samplesheet.csv --outdir s3://your-bucket/prefix --results_parent_id syn12345678 --test_staging_only -profile docker
    ```
 
-**RUN_SYNSTAGE** ([nf-synapse SYNSTAGE](https://github.com/Sage-Bionetworks-Workflows/nf-synapse); input CSV must have syn:// URIs) → **MAKE_TARBALL** (publishDir to `{outdir}/staging/{sample}/`) → **INDEX_TO_SYNAPSE** ([nf-synapse SYNINDEX](https://github.com/Sage-Bionetworks-Workflows/nf-synapse)). No spatialvi or heavy compute.
+**DOWNLOAD_AND_STAGE** (download 5 files, pack FASTQs into `{sample}_fastqs.tar.gz`, publish to `{outdir}/staging/{sample}/`) → **INDEX_STAGING_TO_SYNAPSE** (runs [nf-synapse SYNINDEX](https://github.com/Sage-Bionetworks-Workflows/nf-synapse) to index that folder into Synapse). All staged files (tarball, image, samplesheet) are uploaded at once via SYNINDEX. No spatialvi or heavy compute.
 
 ## Running on Seqera Tower
 
@@ -99,10 +101,9 @@ Additional spatialvi options (e.g. `--spaceranger_reference`, `--spaceranger_pro
 
 ## Outputs
 
-- **SYNSTAGE:** nf-synapse stages all Synapse files to `{outdir}/` (id_folders by Synapse ID); the updated samplesheet with S3 paths is at `{outdir}/synstage/`.
-- **Staging (MAKE_TARBALL):** Per sample, the FASTQ tarball `{sample}_fastqs.tar.gz`, image, and spatialvi samplesheet are written to S3 via publishDir at `{outdir}/staging/{sample}/`.
-- **Full pipeline:** Per sample, spatialvi runs on the staged input; full results are written to S3 via publishDir at `{outdir}/spatialvi_results/{sample}/`, then [nf-synapse SYNINDEX](https://github.com/Sage-Bionetworks-Workflows/nf-synapse) indexes that prefix into the Synapse folder (`results_parent_id`), preserving folder structure.
-- **Test run (`--test_staging_only`):** Staged files at `{outdir}/staging/{sample}/` are indexed into Synapse via SYNINDEX (no spatialvi).
+- **Staging (all runs):** The staged FASTQ tarball `{sample}_fastqs.tar.gz`, image file, and spatialvi samplesheet are published to `{outdir}/staging/{sample}/` (similar to [nf-synapse SYNSTAGE](https://github.com/Sage-Bionetworks-Workflows/nf-synapse)). Paths in the samplesheet are S3 URIs.
+- **Full pipeline:** Per sample, the full spatialvi output directory is uploaded to `{outdir}/spatialvi_results/{sample}/`, then [nf-synapse SYNINDEX](https://github.com/Sage-Bionetworks-Workflows/nf-synapse) indexes it into the Synapse folder given by `results_parent_id` or the row’s `results_parent_id`, preserving the full folder structure (no tarball).
+- **Test run (`--test_staging_only`):** Staged files (tarball, image, samplesheet) at `{outdir}/staging/{sample}/` are indexed into Synapse via SYNINDEX.
 
 ## Notes
 
