@@ -55,6 +55,9 @@ class SpatialviDataset:
     spatialvi_revision: str = "dev"
     """Branch/tag for spatialvi pipeline."""
     
+    cytassist: bool = False
+    """If True, use cytaimage column instead of image in samplesheet."""
+    
     @property
     def staging_location(self) -> str:
         """S3 URI for synstage output."""
@@ -112,6 +115,7 @@ def generate_datasets() -> list[SpatialviDataset]:
             project_prefix="spatialvi_project",
             spaceranger_reference="s3://ntap-add5-project-tower-bucket/spatialvi_testing/refdata-gex-GRCh38-2020-A.tar.gz",
             spaceranger_probeset="s3://ntap-add5-project-tower-bucket/spatialvi_testing/Visium_Human_Transcriptome_Probe_Set_v2.0_GRCh38-2020-A.csv",
+            cytassist=False,  # Set to True if using CytAssist images
         )
     ]
 
@@ -134,16 +138,21 @@ def prepare_synstage_info(dataset: SpatialviDataset) -> LaunchInfo:
 
 def prepare_tarball_info(dataset: SpatialviDataset) -> LaunchInfo:
     """Generate LaunchInfo for make_tarball workflow."""
+    params = {
+        "entry": "make_tarball",
+        "input": dataset.synstage_output_samplesheet,
+        "outdir": dataset.tarball_outdir,
+    }
+    
+    if dataset.cytassist:
+        params["cytassist"] = True
+    
     return LaunchInfo(
         run_name=dataset.tarball_run_name,
         pipeline="ajs3nj/synapse_spatialvi_nf_pipeline",
         revision="orca-orchestration",
         profiles=["docker"],
-        params={
-            "entry": "make_tarball",
-            "input": dataset.synstage_output_samplesheet,
-            "outdir": dataset.tarball_outdir,
-        },
+        params=params,
     )
 
 

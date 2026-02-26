@@ -110,6 +110,7 @@ def generate_datasets() -> list[SpatialviDataset]:
             project_prefix="spatialvi_project",
             spaceranger_reference="s3://bucket/refdata-gex-GRCh38-2020-A.tar.gz",
             spaceranger_probeset="s3://bucket/probeset.csv",  # optional
+            cytassist=False,  # Set to True if using CytAssist images
         )
     ]
 ```
