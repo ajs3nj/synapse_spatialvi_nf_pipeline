@@ -1,2 +1,2 @@
-sample,fastq_1,fastq_2,fastq_3,fastq_4,image,slide,area
-ANNUBP_V42N08_047_A1,s3://bucket/synstage/syn64002035/file1.fastq.gz,s3://bucket/synstage/syn64002036/file2.fastq.gz,s3://bucket/synstage/syn64002037/file3.fastq.gz,s3://bucket/synstage/syn64002038/file4.fastq.gz,s3://bucket/synstage/syn64002032/image.tif,V42N08-047,A1
+sample,fastq_1,fastq_2,fastq_3,fastq_4,image,slide,area,results_parent_id
+ANNUBP_V42N08_047_A1,s3://bucket/synstage/syn64002035/file1.fastq.gz,s3://bucket/synstage/syn64002036/file2.fastq.gz,s3://bucket/synstage/syn64002037/file3.fastq.gz,s3://bucket/synstage/syn64002038/file4.fastq.gz,s3://bucket/synstage/syn64002032/image.tif,V42N08-047,A1,syn73722889
