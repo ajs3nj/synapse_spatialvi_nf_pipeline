@@ -107,11 +107,11 @@ process RUN_SPATIALVI {
   WORKDIR=\$(pwd)
   awk -v w="\$WORKDIR" -F',' 'NR==1{print;next}{ \$2=w"/"\$2; \$3=w"/"\$3; print }' OFS=',' samplesheet.csv > samplesheet_fullpath.csv && mv samplesheet_fullpath.csv samplesheet.csv
 
-  # Create config to use Wave with container strategy (not conda)
-  # Disable docker.runOptions to avoid --platform flag issues with older docker
+  # NOTE: Running nested Nextflow with containers on AWS Batch is challenging.
+  # Disable Wave to avoid --platform flag issues with older Docker CLI.
+  # Use Docker directly with pre-built images from registries.
   cat > spatialvi.config << 'INNERCONFIG'
-wave.enabled = true
-wave.strategy = 'container'
+wave.enabled = false
 docker.enabled = true
 docker.runOptions = ''
 INNERCONFIG
