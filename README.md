@@ -1,113 +1,155 @@
-# spatialvi_nf_pipeline
+# spatialvi_nf_pipeline (Meta-Workflow)
 
-Nextflow pipeline that stages **4 FASTQ files** and **1 image file** from Synapse, runs the [Sage Bionetworks spatialvi fork](https://github.com/sagebio-ada/spatialvi) (Visium spatial transcriptomics, forked from nf-core/spatialvi), uploads full results to S3, and indexes them into Synapse (full folder structure) via [nf-synapse SYNINDEX](https://github.com/Sage-Bionetworks-Workflows/nf-synapse). Designed to run on **Seqera Tower**. All outputs are stored in **S3** — `--outdir` must be an S3 URI.
+A **meta-workflow** for running [spatialvi](https://github.com/sagebio-ada/spatialvi) with data from Synapse and indexing results back to Synapse.
 
-Pattern is similar to [Sage-Bionetworks-Workflows/nf-vcf2maf](https://github.com/Sage-Bionetworks-Workflows/nf-vcf2maf): Synapse → run pipeline → Synapse.
+## Why Meta-Workflow?
 
-## Requirements
+Running nested Nextflow pipelines (Nextflow inside Nextflow) on AWS Batch/Tower is problematic due to Docker-in-Docker limitations. This meta-workflow splits the process into three separate Tower runs:
 
-- Nextflow (22.10+)
-- Access to Synapse (personal access token)
-- Seqera Tower (optional but recommended) for orchestration
-- Container runtime: Docker
+```
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│  STEP 1: stage  │ ──▶ │ STEP 2: spatialvi│ ──▶ │ STEP 3: synindex│
+│  (this pipeline)│     │ (run separately) │     │ (this pipeline) │
+└─────────────────┘     └─────────────────┘     └─────────────────┘
+   Download from           Run spatialvi          Index results
+   Synapse, create         directly on Tower      back to Synapse
+   samplesheet
+```
 
-## Quick start
+## Quick Start
 
-1. **Samplesheet**  
-   Create a CSV with one row per sample. Required columns:
+### Step 1: Stage files from Synapse
 
-   | Column | Description |
-   |--------|-------------|
-   | `sample` | Unique sample ID (must match FASTQ prefix expected by Space Ranger where applicable) |
-   | `synapse_id_fastq_1` | Synapse ID of first FASTQ file |
-   | `synapse_id_fastq_2` | Synapse ID of second FASTQ file |
-   | `synapse_id_fastq_3` | Synapse ID of third FASTQ file |
-   | `synapse_id_fastq_4` | Synapse ID of fourth FASTQ file |
-   | `synapse_id_image` | Synapse ID of the microscopy image (e.g. brightfield) |
-   | `slide` | Visium slide ID (e.g. `V11J26`) |
-   | `area` | Slide area (e.g. `B1`), can be empty for unknown layout |
-   | `results_parent_id` | (Optional) Synapse folder ID where results will be indexed. If omitted, use `--results_parent_id` in params. |
+```bash
+nextflow run . --entry stage \
+  --input samplesheet.csv \
+  --outdir s3://your-bucket/spatialvi_project \
+  --results_parent_id syn123456 \
+  -profile docker
+```
 
-   Example: see `examples/samplesheet.csv`.
+**Output:** `s3://your-bucket/spatialvi_project/spatialvi_samplesheet.csv`
 
-2. **Synapse token**  
-   Create a Synapse personal access token with **view**, **download**, and **modify** scopes, then configure Nextflow secrets:
+### Step 2: Run spatialvi on Tower
 
-   ```bash
-   export NXF_ENABLE_SECRETS=true
-   nextflow secrets put -n SYNAPSE_AUTH_TOKEN -v "<your-synapse-pat>"
-   ```
+Launch `sagebio-ada/spatialvi` (or `nf-core/spatialvi`) as a **separate Tower run**:
 
-3. **Run**  
-   Set **`--outdir`** to an S3 URI (required). With Docker:
+- **Input:** `s3://your-bucket/spatialvi_project/spatialvi_samplesheet.csv`
+- **Outdir:** `s3://your-bucket/spatialvi_project/spatialvi_results`
+- **Other params:** `--spaceranger_reference`, `--spaceranger_probeset`, etc.
 
-   ```bash
-   nextflow run . --input ./samplesheet.csv --outdir s3://your-bucket/prefix --results_parent_id syn12345678 -profile docker
-   ```
+### Step 3: Index results to Synapse
 
-   Or with a params file:
+```bash
+nextflow run . --entry synindex \
+  --input samplesheet.csv \
+  --outdir s3://your-bucket/spatialvi_project \
+  --results_parent_id syn123456 \
+  -profile docker
+```
 
-   ```bash
-   nextflow run . -params-file params.yml -profile docker
-   ```
+## Input Samplesheet
 
-## Staging-only test
+Create a CSV with one row per sample:
 
-To verify **file staging from Synapse → tarball generation → upload to Synapse** without running spatialvi (faster, smaller test):
+| Column | Description |
+|--------|-------------|
+| `sample` | Unique sample ID |
+| `synapse_id_fastq_1` | Synapse ID of first FASTQ file |
+| `synapse_id_fastq_2` | Synapse ID of second FASTQ file |
+| `synapse_id_fastq_3` | Synapse ID of third FASTQ file |
+| `synapse_id_fastq_4` | Synapse ID of fourth FASTQ file |
+| `synapse_id_image` | Synapse ID of the microscopy image |
+| `slide` | Visium slide ID (e.g. `V11J26`) |
+| `area` | Slide area (e.g. `B1`), can be empty |
+| `results_parent_id` | (Optional) Synapse folder ID for this sample's results |
 
-1. Use a samplesheet with **one sample** and real Synapse IDs for the 4 FASTQs and 1 image.
-2. Set **`--results_parent_id`** (or `results_parent_id` in the CSV) to the folder where you want the FASTQ tarball uploaded.
-3. Run with **`--test_staging_only`**:
-
-   ```bash
-   nextflow run . --input ./samplesheet.csv --outdir s3://your-bucket/prefix --results_parent_id syn12345678 --test_staging_only -profile docker
-   ```
-
-**DOWNLOAD_AND_STAGE** (download 5 files, pack FASTQs into `{sample}_fastqs.tar.gz`, publish to `{outdir}/staging/{sample}/`) → **INDEX_STAGING_TO_SYNAPSE** (runs [nf-synapse SYNINDEX](https://github.com/Sage-Bionetworks-Workflows/nf-synapse) to index that folder into Synapse). All staged files (tarball, image, samplesheet) are uploaded at once via SYNINDEX. No spatialvi or heavy compute.
-
-## Running on Seqera Tower
-
-1. **Pipeline**  
-   Use this repo as the pipeline source (Git URL or Tower-linked repo).
-
-2. **Secrets**  
-   In Tower, add a pipeline/workspace secret named **`SYNAPSE_AUTH_TOKEN`** with your Synapse personal access token. Use it when launching the run.
-
-3. **Parameters**  
-   Set at launch:
-   - **`input`**: path to the samplesheet CSV (e.g. in Tower data or a URL).
-   - **`results_parent_id`**: Synapse folder where each sample’s full spatialvi results will be indexed (if not set per sample in the CSV).
-   - **`outdir`**: S3 URI (e.g. `s3://your-bucket/prefix`) — required; all outputs and indexing go through S3.
-
-4. **Profiles**  
-   Use `-profile docker` (and Tower’s default executor, e.g. AWS Batch).
-
-5. **Compute**  
-   `RUN_SPATIALVI` requests 8 CPUs and 32 GB RAM; Space Ranger and spatialvi can be heavy. Adjust in `nextflow.config` or Tower’s compute environment if needed.
+Example:
+```csv
+sample,synapse_id_fastq_1,synapse_id_fastq_2,synapse_id_fastq_3,synapse_id_fastq_4,synapse_id_image,slide,area,results_parent_id
+SAMPLE1,syn001,syn002,syn003,syn004,syn005,V11J26,B1,syn999
+```
 
 ## Parameters
 
-| Parameter | Description | Default |
-|-----------|-------------|---------|
-| `input` | Path to samplesheet CSV | *(required)* |
-| `results_parent_id` | Synapse folder where each sample’s full spatialvi results are indexed (if not in CSV) | null |
-| `test_staging_only` | If true, only stage files, create fastq tarball, and upload it to Synapse (no spatialvi) | false |
-| `spatialvi_pipeline` | SpatialVI pipeline repo (GitHub `org/repo`) | `sagebio-ada/spatialvi` |
-| `spatialvi_release` | Branch or tag to run (e.g. `dev`, `main`) | `dev` |
-| `cytassist` | If true, use `cytaimage` column (Cytassist tissue image) instead of `image` (brightfield) in the spatialvi samplesheet; see [nf-core/spatialvi usage](https://nf-co.re/spatialvi/dev/docs/usage/) | false |
-| `outdir` | S3 URI for all outputs (staging and results); required | *(required)* |
+| Parameter | Description | Required |
+|-----------|-------------|----------|
+| `--entry` | Workflow entry point: `stage` or `synindex` | Yes |
+| `--input` | Path to samplesheet CSV | Yes |
+| `--outdir` | S3 URI for outputs | Yes |
+| `--results_parent_id` | Synapse folder ID for results | Yes |
+| `--cytassist` | Use `cytaimage` column instead of `image` | No (default: false) |
 
-Additional spatialvi options (e.g. `--spaceranger_reference`, `--spaceranger_probeset`) can be passed via `nextflow.config` or Tower parameter overrides if you add them to the `RUN_SPATIALVI` process.
+## Running on Seqera Tower
+
+### Step 1 (stage)
+
+1. Create a new pipeline run with this repository
+2. Set parameters:
+   - `entry`: `stage`
+   - `input`: path to your samplesheet
+   - `outdir`: `s3://your-bucket/project`
+   - `results_parent_id`: Synapse folder ID
+3. Add secret: `SYNAPSE_AUTH_TOKEN`
+4. Launch
+
+### Step 2 (spatialvi)
+
+1. Create a new pipeline run with `sagebio-ada/spatialvi`
+2. Set parameters:
+   - `input`: `s3://your-bucket/project/spatialvi_samplesheet.csv`
+   - `outdir`: `s3://your-bucket/project/spatialvi_results`
+   - `spaceranger_reference`: your reference tarball
+   - `spaceranger_probeset`: your probeset (if needed)
+3. Launch
+
+### Step 3 (synindex)
+
+1. Create a new pipeline run with this repository
+2. Set parameters:
+   - `entry`: `synindex`
+   - `input`: same samplesheet as Step 1
+   - `outdir`: same as Step 1 (`s3://your-bucket/project`)
+   - `results_parent_id`: same Synapse folder ID
+3. Add secret: `SYNAPSE_AUTH_TOKEN`
+4. Launch
 
 ## Outputs
 
-- **Staging (all runs):** The staged FASTQ tarball `{sample}_fastqs.tar.gz`, image file, and spatialvi samplesheet are published to `{outdir}/staging/{sample}/` (similar to [nf-synapse SYNSTAGE](https://github.com/Sage-Bionetworks-Workflows/nf-synapse)). Paths in the samplesheet are S3 URIs.
-- **Full pipeline:** Per sample, the full spatialvi output directory is uploaded to `{outdir}/spatialvi_results/{sample}/`, then [nf-synapse SYNINDEX](https://github.com/Sage-Bionetworks-Workflows/nf-synapse) indexes it into the Synapse folder given by `results_parent_id` or the row’s `results_parent_id`, preserving the full folder structure (no tarball).
-- **Test run (`--test_staging_only`):** Staged files (tarball, image, samplesheet) at `{outdir}/staging/{sample}/` are indexed into Synapse via SYNINDEX.
+### After Step 1 (stage)
+
+```
+s3://your-bucket/project/
+├── staging/
+│   ├── SAMPLE1/
+│   │   ├── SAMPLE1_fastqs.tar.gz
+│   │   └── image.tif
+│   └── SAMPLE2/
+│       ├── SAMPLE2_fastqs.tar.gz
+│       └── image.tif
+└── spatialvi_samplesheet.csv    ← Use this for Step 2
+```
+
+### After Step 2 (spatialvi)
+
+```
+s3://your-bucket/project/
+├── staging/
+│   └── ...
+├── spatialvi_samplesheet.csv
+└── spatialvi_results/           ← Created by spatialvi
+    ├── SAMPLE1/
+    │   └── ...
+    └── SAMPLE2/
+        └── ...
+```
+
+### After Step 3 (synindex)
+
+Results from `spatialvi_results/` are indexed into your Synapse folder.
 
 ## Notes
 
-- The 4 FASTQ files are all FASTQ files. Column order in the input samplesheet (e.g. read 1, read 2, index 1, index 2) is for your bookkeeping; the pipeline preserves Synapse filenames when staging. spatialvi/Space Ranger identifies reads by filename convention (e.g. `_R1_`, `_R2_`, `_I1_`, `_I2_` in the filename), not by order in the directory.
-- Space Ranger and the spatialvi pipeline have their own requirements (reference, probeset for FFPE/Cytassist). Use spatialvi’s `--spaceranger_reference` and `--spaceranger_probeset` as needed; you can wire these through params and the `RUN_SPATIALVI` script if required. For Cytassist samples, set `--cytassist` so the generated samplesheet uses the `cytaimage` column.
-- The pipeline requires **`outdir`** to be an S3 URI; it will exit with an error otherwise. Ensure the compute environment has enough memory and that Docker is available for the spatialvi sub-run.
-- The pipeline uses the [sagebio-ada/spatialvi](https://github.com/sagebio-ada/spatialvi) fork by default; override `--spatialvi_pipeline` to use another repo (e.g. `nf-core/spatialvi`).
+- The same `--input` samplesheet and `--outdir` should be used for Steps 1 and 3
+- Step 2's `--outdir` should be `{your-outdir}/spatialvi_results` so Step 3 can find the results
+- spatialvi identifies reads by filename convention (`_R1_`, `_R2_`, `_I1_`, `_I2_`), not by order
