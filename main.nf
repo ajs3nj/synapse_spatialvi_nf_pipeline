@@ -8,6 +8,30 @@ nextflow.enable.dsl = 2
  * Compatible with Seqera Tower (use SYNAPSE_AUTH_TOKEN secret).
  */
 
+// Fetch already-staged data from S3 (skip Synapse download)
+// Used when --skip_staging is set and data was previously staged
+process FETCH_STAGED {
+  tag "${meta.sample}"
+  container "amazon/aws-cli:latest"
+  cpus 2
+  memory '4 GB'
+
+  input:
+  tuple val(meta), val(synapse_ids)
+
+  output:
+  tuple val(meta), path("staged"), emit: staged
+
+  script:
+  def sample = meta.sample
+  def outdirNorm = params.outdir.toString().replaceAll(/\/+$/, '')
+  def stagingPrefix = "${outdirNorm}/staging/${sample}"
+  """
+  mkdir -p staged
+  aws s3 cp --recursive "${stagingPrefix}/" staged/
+  """
+}
+
 // Download all 5 Synapse files for one sample and stage for nf-core/spatialvi
 process DOWNLOAD_AND_STAGE {
   tag "${meta.sample}"
@@ -184,12 +208,19 @@ workflow {
     .splitCsv(header: true, strip: true)
     .map { row -> parse_row(row) }
 
-  DOWNLOAD_AND_STAGE(sample_rows)
+  // Either fetch from S3 (skip_staging) or download from Synapse
+  if (params.skip_staging) {
+    FETCH_STAGED(sample_rows)
+    staged_ch = FETCH_STAGED.out.staged
+  } else {
+    DOWNLOAD_AND_STAGE(sample_rows)
+    staged_ch = DOWNLOAD_AND_STAGE.out.staged
+  }
 
   if (params.test_staging_only) {
-    INDEX_STAGING_TO_SYNAPSE(DOWNLOAD_AND_STAGE.out.staged)
+    INDEX_STAGING_TO_SYNAPSE(staged_ch)
   } else {
-    RUN_SPATIALVI(DOWNLOAD_AND_STAGE.out.staged)
+    RUN_SPATIALVI(staged_ch)
     UPLOAD_RESULTS_TO_S3(RUN_SPATIALVI.out.results)
     INDEX_TO_SYNAPSE(UPLOAD_RESULTS_TO_S3.out.uploaded)
   }
