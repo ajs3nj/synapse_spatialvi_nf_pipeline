@@ -12,7 +12,7 @@ nextflow.enable.dsl = 2
 // Used when --skip_staging is set and data was previously staged
 process FETCH_STAGED {
   tag "${meta.sample}"
-  container "amazon/aws-cli:latest"
+  container "public.ecr.aws/amazonlinux/amazonlinux:2023"
   cpus 2
   memory '4 GB'
 
@@ -27,6 +27,7 @@ process FETCH_STAGED {
   def outdirNorm = params.outdir.toString().replaceAll(/\/+$/, '')
   def stagingPrefix = "${outdirNorm}/staging/${sample}"
   """
+  yum install -y aws-cli
   mkdir -p staged
   aws s3 cp --recursive "${stagingPrefix}/" staged/
   """
@@ -154,7 +155,7 @@ process INDEX_STAGING_TO_SYNAPSE {
 // Upload full spatialvi results directory to S3 (for indexing into Synapse via SYNINDEX)
 process UPLOAD_RESULTS_TO_S3 {
   tag "${meta.sample}"
-  container "amazon/aws-cli:latest"
+  container "public.ecr.aws/amazonlinux/amazonlinux:2023"
   cpus 2
   memory '4 GB'
 
@@ -168,6 +169,7 @@ process UPLOAD_RESULTS_TO_S3 {
   def outdirNorm = params.outdir.toString().replaceAll(/\/+$/, '')
   def s3_prefix = "${outdirNorm}/spatialvi_results/${meta.sample}"
   """
+  yum install -y aws-cli
   aws s3 cp --recursive results/ "${s3_prefix}/"
   """
 }
