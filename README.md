@@ -1,4 +1,4 @@
-# spatialvi_nf_pipeline (Meta-Workflow)
+# spatialvi_nf_pipeline (Meta-Workflow Orchestrator)
 
 A **meta-workflow** for running [spatialvi](https://github.com/sagebio-ada/spatialvi) with data from Synapse and indexing results back to Synapse.
 
@@ -16,7 +16,42 @@ Running nested Nextflow pipelines (Nextflow inside Nextflow) on AWS Batch/Tower 
    samplesheet
 ```
 
-## Quick Start
+## Orchestration Options
+
+### Option A: Manual Tower Launches (Simple)
+
+Launch each step manually in Tower. See [Manual Workflow](#manual-workflow) below.
+
+### Option B: Tower CLI Script (Automated)
+
+Use the provided script to orchestrate all three steps:
+
+```bash
+export TOWER_ACCESS_TOKEN=<your-token>
+export TOWER_WORKSPACE_ID=<your-workspace-id>
+
+./scripts/run_meta_workflow.sh \
+  --input s3://bucket/samplesheet.csv \
+  --outdir s3://bucket/spatialvi_project \
+  --results-parent-id syn73722889 \
+  --spaceranger-ref s3://bucket/refdata-gex-GRCh38-2020-A.tar.gz \
+  --spaceranger-probeset s3://bucket/probeset.csv
+```
+
+The script will:
+1. Launch the staging step and wait for completion
+2. Launch spatialvi and wait for completion
+3. Launch synindex and wait for completion
+
+See `./scripts/run_meta_workflow.sh --help` for all options.
+
+### Option C: Tower Actions (Event-Driven)
+
+Configure Tower Actions to automatically trigger subsequent steps. See `tower/actions.yml` for setup documentation.
+
+---
+
+## Manual Workflow
 
 ### Step 1: Stage files from Synapse
 
@@ -47,6 +82,8 @@ nextflow run . --entry synindex \
   --results_parent_id syn123456 \
   -profile docker
 ```
+
+---
 
 ## Input Samplesheet
 
@@ -148,8 +185,36 @@ s3://your-bucket/project/
 
 Results from `spatialvi_results/` are indexed into your Synapse folder.
 
+## Tower CLI Script Options
+
+```
+./scripts/run_meta_workflow.sh --help
+
+Required:
+  --input FILE              Samplesheet CSV with Synapse IDs (S3 path)
+  --outdir URI              S3 output directory
+  --results-parent-id ID    Synapse folder ID for results
+
+Optional:
+  --spatialvi-pipeline STR  spatialvi pipeline (default: sagebio-ada/spatialvi)
+  --spatialvi-revision STR  spatialvi revision (default: dev)
+  --spaceranger-ref URI     Spaceranger reference tarball
+  --spaceranger-probeset URI Spaceranger probeset file
+  --compute-env ID          Tower compute environment ID
+  --workspace ID            Tower workspace ID
+  --skip-stage              Skip staging step (data already staged)
+  --skip-spatialvi          Skip spatialvi step
+  --skip-synindex           Skip synindex step
+  --dry-run                 Print commands without executing
+```
+
 ## Notes
 
 - The same `--input` samplesheet and `--outdir` should be used for Steps 1 and 3
 - Step 2's `--outdir` should be `{your-outdir}/spatialvi_results` so Step 3 can find the results
 - spatialvi identifies reads by filename convention (`_R1_`, `_R2_`, `_I1_`, `_I2_`), not by order
+- Tower CLI requires `tw` to be installed: https://github.com/seqeralabs/tower-cli
+
+## Related: Direct Integration into spatialvi Fork
+
+For a single-pipeline approach (no orchestration needed), see the module files in `spatialvi_modules/` which can be integrated directly into the `sagebio-ada/spatialvi` fork.
