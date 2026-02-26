@@ -5,24 +5,20 @@ Orchestrates four steps:
   1. nf-synapse SYNSTAGE  : Download files from Synapse to S3
   2. make_tarball         : Create FASTQ tarballs + spatialvi samplesheet
   3. spatialvi            : Run spatialvi analysis
-  4. nf-synapse SYNINDEX  : Index results back to Synapse (per-sample or batch)
+  4. nf-synapse SYNINDEX  : Index results back to Synapse
 
 Usage:
   python spatialvi_workflow.py
 
 Prerequisites:
-  - pip install py-orca boto3
+  - pip install py-orca
   - AWS credentials configured
   - SYNAPSE_AUTH_TOKEN in Tower workspace secrets
 """
 
 import asyncio
-import csv
-import io
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-
-import boto3
 
 from orca.services.nextflowtower import NextflowTowerOps
 from orca.services.nextflowtower.models import LaunchInfo
@@ -38,6 +34,9 @@ class SpatialviDataset:
     synstage_input_samplesheet: str
     """S3 path to the synstage input samplesheet (with syn:// URIs)."""
     
+    synapse_output_folder: str
+    """Synapse folder ID where results will be indexed."""
+    
     bucket_name: str
     """S3 bucket for staging and outputs."""
     
@@ -49,9 +48,6 @@ class SpatialviDataset:
     
     spaceranger_probeset: str | None = None
     """S3 path to spaceranger probeset (optional)."""
-    
-    default_synapse_output_folder: str | None = None
-    """Default Synapse folder ID if not specified per-sample in samplesheet."""
     
     spatialvi_pipeline: str = "sagebio-ada/spatialvi"
     """GitHub repo for spatialvi pipeline."""
@@ -97,18 +93,9 @@ class SpatialviDataset:
     def spatialvi_run_name(self) -> str:
         return f"spatialvi_{self.id}"
     
-    def synindex_run_name(self, sample: str | None = None) -> str:
-        if sample:
-            return f"synindex_{self.id}_{sample}"
+    @property
+    def synindex_run_name(self) -> str:
         return f"synindex_{self.id}"
-
-
-@dataclass
-class SampleSynindexInfo:
-    """Per-sample information for SYNINDEX."""
-    sample: str
-    s3_prefix: str
-    parent_id: str
 
 
 def generate_datasets() -> list[SpatialviDataset]:
@@ -120,77 +107,13 @@ def generate_datasets() -> list[SpatialviDataset]:
         SpatialviDataset(
             id="ANNUBP_test",
             synstage_input_samplesheet="s3://ntap-add5-project-tower-bucket/spatialvi_project/synstage_input.csv",
+            synapse_output_folder="syn73722889",
             bucket_name="ntap-add5-project-tower-bucket",
             project_prefix="spatialvi_project",
             spaceranger_reference="s3://ntap-add5-project-tower-bucket/spatialvi_testing/refdata-gex-GRCh38-2020-A.tar.gz",
             spaceranger_probeset="s3://ntap-add5-project-tower-bucket/spatialvi_testing/Visium_Human_Transcriptome_Probe_Set_v2.0_GRCh38-2020-A.csv",
-            default_synapse_output_folder="syn73722889",  # Used if results_parent_id not in samplesheet
         )
     ]
-
-
-def read_samplesheet_from_s3(s3_path: str) -> list[dict]:
-    """Read a CSV samplesheet from S3 and return as list of dicts."""
-    # Parse S3 path
-    if not s3_path.startswith("s3://"):
-        raise ValueError(f"Expected S3 path, got: {s3_path}")
-    
-    path_parts = s3_path[5:].split("/", 1)
-    bucket = path_parts[0]
-    key = path_parts[1] if len(path_parts) > 1 else ""
-    
-    s3 = boto3.client("s3")
-    response = s3.get_object(Bucket=bucket, Key=key)
-    content = response["Body"].read().decode("utf-8")
-    
-    reader = csv.DictReader(io.StringIO(content))
-    return list(reader)
-
-
-def get_synindex_info_from_samplesheet(
-    dataset: SpatialviDataset,
-) -> list[SampleSynindexInfo]:
-    """Parse samplesheet and return per-sample SYNINDEX info.
-    
-    If all samples have the same results_parent_id (or none specified),
-    returns a single entry for batch indexing. Otherwise returns one
-    entry per unique sample/parent_id combination.
-    """
-    rows = read_samplesheet_from_s3(dataset.synstage_output_samplesheet)
-    
-    # Collect unique parent_ids
-    sample_info = []
-    for row in rows:
-        sample = row.get("sample", "")
-        parent_id = row.get("results_parent_id", "").strip()
-        
-        if not parent_id and dataset.default_synapse_output_folder:
-            parent_id = dataset.default_synapse_output_folder
-        
-        if not parent_id:
-            raise ValueError(
-                f"No results_parent_id for sample {sample} and no default specified"
-            )
-        
-        sample_info.append(SampleSynindexInfo(
-            sample=sample,
-            s3_prefix=f"{dataset.spatialvi_outdir}/{sample}",
-            parent_id=parent_id,
-        ))
-    
-    # Check if all samples go to the same parent
-    unique_parents = set(s.parent_id for s in sample_info)
-    
-    if len(unique_parents) == 1:
-        # All samples go to same folder - batch index the entire results dir
-        return [SampleSynindexInfo(
-            sample="all",
-            s3_prefix=dataset.spatialvi_outdir,
-            parent_id=list(unique_parents)[0],
-        )]
-    
-    # Different folders - need per-sample indexing
-    return sample_info
 
 
 def prepare_synstage_info(dataset: SpatialviDataset) -> LaunchInfo:
@@ -244,22 +167,17 @@ def prepare_spatialvi_info(dataset: SpatialviDataset) -> LaunchInfo:
     )
 
 
-def prepare_synindex_info(
-    dataset: SpatialviDataset,
-    synindex_info: SampleSynindexInfo,
-) -> LaunchInfo:
+def prepare_synindex_info(dataset: SpatialviDataset) -> LaunchInfo:
     """Generate LaunchInfo for nf-synapse SYNINDEX."""
     return LaunchInfo(
-        run_name=dataset.synindex_run_name(
-            None if synindex_info.sample == "all" else synindex_info.sample
-        ),
+        run_name=dataset.synindex_run_name,
         pipeline="Sage-Bionetworks-Workflows/nf-synapse",
         revision="main",
         profiles=["docker"],
         params={
             "entry": "synindex",
-            "s3_prefix": synindex_info.s3_prefix,
-            "parent_id": synindex_info.parent_id,
+            "s3_prefix": dataset.spatialvi_outdir,
+            "parent_id": dataset.synapse_output_folder,
         },
         workspace_secrets=["SYNAPSE_AUTH_TOKEN"],
     )
@@ -303,36 +221,21 @@ async def run_spatialvi_workflow(ops: NextflowTowerOps, dataset: SpatialviDatase
         raise RuntimeError(f"SPATIALVI failed for {dataset.id}: {status}")
     
     # Step 4: SYNINDEX - Index results back to Synapse
-    # Read samplesheet to determine if we need per-sample or batch indexing
-    print(f"\n[Step 4/4] Preparing SYNINDEX for {dataset.id}...")
-    synindex_infos = get_synindex_info_from_samplesheet(dataset)
-    
-    if len(synindex_infos) == 1 and synindex_infos[0].sample == "all":
-        print(f"  All samples go to same Synapse folder - batch indexing")
-    else:
-        print(f"  Per-sample indexing required for {len(synindex_infos)} samples")
-    
-    for synindex_info in synindex_infos:
-        sample_desc = "all results" if synindex_info.sample == "all" else synindex_info.sample
-        print(f"\n  Launching SYNINDEX for {sample_desc}...")
-        print(f"    S3 prefix: {synindex_info.s3_prefix}")
-        print(f"    Parent ID: {synindex_info.parent_id}")
-        
-        launch_info = prepare_synindex_info(dataset, synindex_info)
-        synindex_run_id = ops.launch_workflow(launch_info, "spot")
-        print(f"    Run ID: {synindex_run_id}")
-        status = await ops.monitor_workflow(run_id=synindex_run_id, wait_time=60 * 2)
-        print(f"    Status: {status}")
-        if status != "SUCCEEDED":
-            raise RuntimeError(
-                f"SYNINDEX failed for {dataset.id}/{synindex_info.sample}: {status}"
-            )
+    print(f"\n[Step 4/4] Launching SYNINDEX for {dataset.id}...")
+    synindex_info = prepare_synindex_info(dataset)
+    synindex_run_id = ops.launch_workflow(synindex_info, "spot")
+    print(f"  Run ID: {synindex_run_id}")
+    status = await ops.monitor_workflow(run_id=synindex_run_id, wait_time=60 * 2)
+    print(f"  Status: {status}")
+    if status != "SUCCEEDED":
+        raise RuntimeError(f"SYNINDEX failed for {dataset.id}: {status}")
     
     print(f"\n{'='*60}")
     print(f"Completed spatialvi workflow for: {dataset.id}")
+    print(f"Results indexed to Synapse folder: {dataset.synapse_output_folder}")
     print(f"{'='*60}\n")
     
-    return "SUCCEEDED"
+    return status
 
 
 async def main():
