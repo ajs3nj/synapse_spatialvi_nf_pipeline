@@ -27,24 +27,24 @@ process MAKE_TARBALL {
   memory '4 GB'
 
   input:
-  tuple val(meta), path(fastq1), path(fastq2), path(fastq3), path(fastq4), path(image)
+  tuple val(meta), path(fastq1), path(fastq2), path(fastq3), path(fastq4)
 
   output:
-  tuple val(meta), path("${meta.sample}_fastqs.tar.gz"), path("image_out/*"), emit: staged
+  tuple val(meta), path("${meta.sample}_fastqs.tar.gz"), emit: tarball
   tuple val(meta), path("samplesheet_row.csv"), emit: samplesheet_row
 
   script:
   def sample = meta.sample
   def slide = meta.slide
   def area = meta.area ?: ''
+  def imagePath = meta.image_path
   def outdirNorm = params.outdir.toString().replaceAll(/\/+$/, '')
   def tarballPath = "${outdirNorm}/tarballs/${sample}/${sample}_fastqs.tar.gz"
-  def imageCol = params.cytassist ? 'cytaimage' : 'image'
   """
   set -e
   yum install -y tar gzip
 
-  mkdir -p fastqs image_out
+  mkdir -p fastqs
 
   # Copy FASTQs to staging directory
   cp ${fastq1} fastqs/
@@ -52,24 +52,15 @@ process MAKE_TARBALL {
   cp ${fastq3} fastqs/
   cp ${fastq4} fastqs/
 
-  # Copy image and get filename
-  cp ${image} image_out/
-  imgfile=\$(basename ${image})
-
-  # Replace spaces in filenames
+  # Replace spaces in FASTQ filenames
   shopt -s nullglob
   for f in fastqs/*\\ *; do [ -e "\$f" ] && mv "\$f" "\${f// /_}"; done
-  if [[ "\$imgfile" == *" "* ]]; then
-    newimg="\${imgfile// /_}"
-    mv "image_out/\$imgfile" "image_out/\$newimg"
-    imgfile="\$newimg"
-  fi
 
   # Create FASTQ tarball
   tar -czvf ${sample}_fastqs.tar.gz -C fastqs .
 
-  # Write samplesheet row (S3 paths for spatialvi)
-  echo "${sample},${tarballPath},${outdirNorm}/tarballs/${sample}/image_out/\${imgfile},${slide},${area}" > samplesheet_row.csv
+  # Write samplesheet row - use original image path from synstage
+  echo "${sample},${tarballPath},${imagePath},${slide},${area}" > samplesheet_row.csv
   """
 }
 
@@ -117,15 +108,15 @@ workflow MAKE_TARBALL_WF {
       def meta = [
         sample: row.sample,
         slide: row.slide,
-        area: row.area ?: ''
+        area: row.area ?: '',
+        image_path: row.image  // Store image path in meta to pass through
       ]
       tuple(
         meta,
         file(row.fastq_1),
         file(row.fastq_2),
         file(row.fastq_3),
-        file(row.fastq_4),
-        file(row.image)
+        file(row.fastq_4)
       )
     }
 

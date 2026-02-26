@@ -14,8 +14,7 @@ A simple Nextflow pipeline that takes files staged by [nf-synapse](https://githu
 **What it does:**
 1. Reads the SYNSTAGE output samplesheet (which has S3 paths to individual files)
 2. Creates a FASTQ tarball per sample from the 4 individual FASTQ files
-3. Copies the microscopy image to the output directory
-4. **Generates `spatialvi_samplesheet.csv`** - a new samplesheet formatted for spatialvi with paths to the tarballs and images
+3. **Generates `spatialvi_samplesheet.csv`** - a new samplesheet formatted for spatialvi with paths to the tarballs and the original image locations from synstage
 
 ### Parameters
 
@@ -47,17 +46,15 @@ The input is the output from nf-synapse SYNSTAGE - a CSV where `syn://` URIs hav
 s3://bucket/project/
 ├── tarballs/
 │   └── SAMPLE1/
-│       ├── SAMPLE1_fastqs.tar.gz
-│       └── image_out/
-│           └── image.tif
+│       └── SAMPLE1_fastqs.tar.gz
 └── spatialvi_samplesheet.csv    ← Generated samplesheet for spatialvi
 ```
 
-The generated `spatialvi_samplesheet.csv` contains:
+The generated `spatialvi_samplesheet.csv` references the tarball and the original image location from synstage:
 
 ```csv
 sample,fastq_dir,image,slide,area
-SAMPLE1,s3://bucket/project/tarballs/SAMPLE1/SAMPLE1_fastqs.tar.gz,s3://bucket/project/tarballs/SAMPLE1/image_out/image.tif,V11J26,A1
+SAMPLE1,s3://bucket/project/tarballs/SAMPLE1/SAMPLE1_fastqs.tar.gz,s3://bucket/project/synstage/syn64002032/image.tif,V11J26,A1
 ```
 
 This samplesheet is ready to use as input for spatialvi.
