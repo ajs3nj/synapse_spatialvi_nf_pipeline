@@ -4,7 +4,7 @@ A **meta-workflow** for running [spatialvi](https://github.com/sagebio-ada/spati
 
 ## Overview
 
-This workflow uses existing `nf-synapse` workflows for Synapse interaction and adds a tarball step for spatialvi:
+This workflow uses existing [nf-synapse](https://github.com/Sage-Bionetworks-Workflows/nf-synapse) workflows (SYNSTAGE and SYNINDEX) for Synapse interaction and adds a tarball step for spatialvi:
 
 ```
 ┌─────────────────────┐     ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────────┐
