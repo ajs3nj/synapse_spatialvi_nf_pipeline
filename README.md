@@ -12,9 +12,10 @@ This repository contains two things:
 A simple Nextflow pipeline that takes files staged by [nf-synapse](https://github.com/Sage-Bionetworks-Workflows/nf-synapse) SYNSTAGE and prepares them for [spatialvi](https://github.com/sagebio-ada/spatialvi).
 
 **What it does:**
-- Takes individual FASTQ files and creates a tarball per sample
-- Copies the microscopy image
-- Generates a `spatialvi_samplesheet.csv` with S3 paths
+1. Reads the SYNSTAGE output samplesheet (which has S3 paths to individual files)
+2. Creates a FASTQ tarball per sample from the 4 individual FASTQ files
+3. Copies the microscopy image to the output directory
+4. **Generates `spatialvi_samplesheet.csv`** - a new samplesheet formatted for spatialvi with paths to the tarballs and images
 
 ### Parameters
 
@@ -49,8 +50,17 @@ s3://bucket/project/
 │       ├── SAMPLE1_fastqs.tar.gz
 │       └── image_out/
 │           └── image.tif
-└── spatialvi_samplesheet.csv
+└── spatialvi_samplesheet.csv    ← Generated samplesheet for spatialvi
 ```
+
+The generated `spatialvi_samplesheet.csv` contains:
+
+```csv
+sample,fastq_dir,image,slide,area
+SAMPLE1,s3://bucket/project/tarballs/SAMPLE1/SAMPLE1_fastqs.tar.gz,s3://bucket/project/tarballs/SAMPLE1/image_out/image.tif,V11J26,A1
+```
+
+This samplesheet is ready to use as input for spatialvi.
 
 ### Running Standalone
 
