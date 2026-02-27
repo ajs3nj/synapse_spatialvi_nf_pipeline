@@ -103,14 +103,32 @@ Edit `orca/spatialvi_workflow.py` and modify `generate_datasets()`:
 def generate_datasets() -> list[SpatialviDataset]:
     return [
         SpatialviDataset(
+            # Unique identifier for this run - used in Tower run names
+            # e.g., "synstage_my_dataset", "spatialvi_my_dataset"
             id="my_dataset",
+            
+            # S3 path to your input samplesheet with syn:// URIs
             synstage_input_samplesheet="s3://bucket/project/synstage_input.csv",
+            
+            # Synapse folder ID where final results will be indexed
             synapse_output_folder="syn123456",
+            
+            # S3 bucket name (without s3:// prefix)
             bucket_name="my-bucket",
+            
+            # Path prefix within the bucket for organizing outputs
+            # All outputs go under: s3://bucket_name/project_prefix/
+            #   - synstage/         (staged files from Synapse)
+            #   - tarballs/         (FASTQ tarballs)
+            #   - spatialvi_results/ (spatialvi outputs)
             project_prefix="spatialvi_project",
+            
+            # Spaceranger reference and probeset
             spaceranger_reference="s3://bucket/refdata-gex-GRCh38-2020-A.tar.gz",
             spaceranger_probeset="s3://bucket/probeset.csv",  # optional
-            cytassist=False,  # Set to True if using CytAssist images
+            
+            # Set to True if using CytAssist images
+            cytassist=False,
         )
     ]
 ```
