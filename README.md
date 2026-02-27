@@ -95,6 +95,20 @@ The `orca/spatialvi_workflow.py` script orchestrates a complete spatialvi workfl
 pip install py-orca
 ```
 
+### Tower configuration
+
+Set these environment variables before running:
+
+```bash
+export TOWER_ACCESS_TOKEN=your-tower-personal-access-token
+export TOWER_WORKSPACE=your-org/your-workspace
+```
+
+Optional (defaults to Tower Cloud):
+```bash
+export TOWER_API_ENDPOINT=https://api.tower.nf
+```
+
 ### Configuration
 
 Edit `orca/spatialvi_workflow.py` and modify `generate_datasets()`:

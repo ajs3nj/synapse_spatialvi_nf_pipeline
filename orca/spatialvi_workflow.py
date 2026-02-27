@@ -14,14 +14,46 @@ Prerequisites:
   - pip install py-orca
   - AWS credentials configured
   - SYNAPSE_AUTH_TOKEN in Tower workspace secrets
+
+Tower configuration (set before running):
+  - TOWER_ACCESS_TOKEN  : Tower personal access token
+  - TOWER_WORKSPACE     : Workspace in org/workspace format (e.g. my-org/my-workspace)
+  - TOWER_API_ENDPOINT  : (optional) API URL, defaults to https://api.tower.nf
 """
 
 import asyncio
+import os
 from dataclasses import dataclass
 from pathlib import Path
 
 from orca.services.nextflowtower import NextflowTowerOps
+from orca.services.nextflowtower.config import NextflowTowerConfig
 from orca.services.nextflowtower.models import LaunchInfo
+
+
+def get_tower_ops() -> NextflowTowerOps:
+    """Create NextflowTowerOps with config from environment variables."""
+    token = os.environ.get("TOWER_ACCESS_TOKEN") or os.environ.get("TOWER_AUTH_TOKEN")
+    workspace = os.environ.get("TOWER_WORKSPACE")
+    api_endpoint = os.environ.get("TOWER_API_ENDPOINT", "https://api.tower.nf")
+
+    if not token:
+        raise SystemExit(
+            "Missing TOWER_ACCESS_TOKEN. Set it before running:\n"
+            "  export TOWER_ACCESS_TOKEN=your-token"
+        )
+    if not workspace:
+        raise SystemExit(
+            "Missing TOWER_WORKSPACE. Set it before running (org/workspace format):\n"
+            "  export TOWER_WORKSPACE=my-org/my-workspace"
+        )
+
+    config = NextflowTowerConfig(
+        api_endpoint=api_endpoint.rstrip("/"),
+        auth_token=token,
+        workspace=workspace,
+    )
+    return NextflowTowerOps(config=config)
 
 
 @dataclass
@@ -249,7 +281,7 @@ async def run_spatialvi_workflow(ops: NextflowTowerOps, dataset: SpatialviDatase
 
 async def main():
     """Main entry point - run all datasets."""
-    ops = NextflowTowerOps()
+    ops = get_tower_ops()
     datasets = generate_datasets()
     
     print(f"Starting spatialvi meta-workflow for {len(datasets)} dataset(s)")
