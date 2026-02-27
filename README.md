@@ -178,6 +178,14 @@ cd orca/
 python spatialvi_workflow.py
 ```
 
+To run in the background (so you can close your terminal):
+```bash
+cd orca/
+nohup python spatialvi_workflow.py > workflow.log 2>&1 &
+```
+
+Check progress with `tail -f workflow.log`.
+
 The script will:
 1. Launch SYNSTAGE on Tower and wait for completion
 2. Launch make_tarball on Tower and wait for completion
