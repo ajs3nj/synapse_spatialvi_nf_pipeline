@@ -104,10 +104,13 @@ export TOWER_ACCESS_TOKEN=your-tower-personal-access-token
 export TOWER_WORKSPACE=your-org/your-workspace
 ```
 
-Optional (defaults to Tower Cloud):
+For Sage Bionetworks Tower:
 ```bash
-export TOWER_API_ENDPOINT=https://api.tower.nf
+export TOWER_API_ENDPOINT="https://tower.sagebionetworks.org/api"
+export TOWER_WORKSPACE="sage-bionetworks/ntap-add5-project"
 ```
+
+For Seqera Tower Cloud, omit `TOWER_API_ENDPOINT` (defaults to `https://api.tower.nf`).
 
 ### Configuration
 
