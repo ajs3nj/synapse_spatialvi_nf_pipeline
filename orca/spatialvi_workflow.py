@@ -108,14 +108,14 @@ def generate_datasets() -> list[SpatialviDataset]:
     """
     return [
         SpatialviDataset(
-            id="ANNUBP_test",
-            synstage_input_samplesheet="s3://ntap-add5-project-tower-bucket/spatialvi_project/synstage_input.csv",
+            id="annupb_test",
+            synstage_input_samplesheet="s3://ntap-add5-project-tower-bucket/synapse_spatialvi_testing/orca_annupb_test_samplesheet.csv",
             synapse_output_folder="syn73722889",
             bucket_name="ntap-add5-project-tower-bucket",
-            project_prefix="spatialvi_project",
-            spaceranger_reference="s3://ntap-add5-project-tower-bucket/spatialvi_testing/refdata-gex-GRCh38-2020-A.tar.gz",
+            project_prefix="synapse_spatialvi_testing/annupb_test",
+            spaceranger_reference="s3://ntap-add5-project-tower-bucket/reference/refdata-gex-GRCh38-2020-A.tar.gz",
             spaceranger_probeset="s3://ntap-add5-project-tower-bucket/spatialvi_testing/Visium_Human_Transcriptome_Probe_Set_v2.0_GRCh38-2020-A.csv",
-            cytassist=False,  # Set to True if using CytAssist images
+            cytassist=True,
         )
     ]
 
