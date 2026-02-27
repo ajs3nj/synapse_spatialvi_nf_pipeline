@@ -27,12 +27,26 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from orca.services.nextflowtower import NextflowTowerOps
+from orca.services.nextflowtower.client import NextflowTowerClient
 from orca.services.nextflowtower.config import NextflowTowerConfig
 from orca.services.nextflowtower.models import LaunchInfo
 
 
+def _patch_tower_client_double_slash():
+    """Fix py-orca URL construction: path has leading slash, causing // in URL and 401."""
+    _original_request = NextflowTowerClient.request
+
+    def _patched_request(self, method: str, path: str, **kwargs):
+        path = path.lstrip("/")
+        return _original_request(self, method, path, **kwargs)
+
+    NextflowTowerClient.request = _patched_request
+
+
 def get_tower_ops() -> NextflowTowerOps:
     """Create NextflowTowerOps with config from environment variables."""
+    _patch_tower_client_double_slash()
+
     token = os.environ.get("TOWER_ACCESS_TOKEN") or os.environ.get("TOWER_AUTH_TOKEN")
     workspace = os.environ.get("TOWER_WORKSPACE")
     api_endpoint = os.environ.get("TOWER_API_ENDPOINT", "https://api.tower.nf")
