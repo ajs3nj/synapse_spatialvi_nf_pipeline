@@ -21,7 +21,7 @@ nextflow.enable.dsl = 2
 // Create FASTQ tarball from staged files and generate spatialvi samplesheet row
 process MAKE_TARBALL {
   tag "${meta.sample}"
-  container "public.ecr.aws/amazonlinux/amazonlinux:2023"
+  container "ubuntu:22.04"
   publishDir "${params.outdir}/tarballs/${meta.sample}", mode: 'copy'
   cpus 2
   memory '4 GB'
@@ -42,7 +42,6 @@ process MAKE_TARBALL {
   def tarballPath = "${outdirNorm}/tarballs/${sample}/${sample}_fastqs.tar.gz"
   """
   set -e
-  yum install -y tar gzip procps
 
   mkdir -p fastqs
 
