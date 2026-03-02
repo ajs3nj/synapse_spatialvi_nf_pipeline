@@ -3,244 +3,182 @@
 nextflow.enable.dsl = 2
 
 /*
- * Pipeline: Stage FASTQ + image from Synapse -> run nf-core/spatialvi -> index results to Synapse.
- * Samplesheet: CSV with Synapse IDs for 4 FASTQ files and 1 image per sample.
- * Compatible with Seqera Tower (use SYNAPSE_AUTH_TOKEN secret).
+ * Meta-workflow for Synapse -> spatialvi -> Synapse
+ * 
+ * This pipeline is designed to be orchestrated via Orca or Tower CLI:
+ *   1. nf-synapse SYNSTAGE  : Download files from Synapse to S3
+ *   2. This pipeline (make_tarball) : Create FASTQ tarballs + spatialvi samplesheet
+ *   3. spatialvi            : Run spatialvi on staged data
+ *   4. nf-synapse SYNINDEX  : Index results back to Synapse
+ *
+ * This file contains the MAKE_TARBALL workflow (step 2).
  */
 
-// Fetch already-staged data from S3 (skip Synapse download)
-// Used when --skip_staging is set and data was previously staged
-process FETCH_STAGED {
+// ============================================================================
+// PROCESSES
+// ============================================================================
+
+// Create FASTQ tarball from staged files and generate spatialvi samplesheet row
+process MAKE_TARBALL {
   tag "${meta.sample}"
-  container "public.ecr.aws/amazonlinux/amazonlinux:2023"
+  container "ubuntu:22.04"
+  publishDir "${params.outdir}/tarballs/${meta.sample}", mode: 'copy'
   cpus 2
   memory '4 GB'
 
   input:
-  tuple val(meta), val(synapse_ids)
+  tuple val(meta), path(fastq1), path(fastq2), path(fastq3), path(fastq4)
 
   output:
-  tuple val(meta), path("staged"), emit: staged
+  tuple val(meta), path("${meta.sample}_fastqs.tar.gz"), emit: tarball
+  tuple val(meta), path("samplesheet_row.csv"), emit: samplesheet_row
 
   script:
-  def sample = meta.sample
-  def outdirNorm = params.outdir.toString().replaceAll(/\/+$/, '')
-  def stagingPrefix = "${outdirNorm}/staging/${sample}"
-  """
-  yum install -y aws-cli
-  mkdir -p staged
-  aws s3 cp --recursive "${stagingPrefix}/" staged/
-  """
-}
-
-// Download all 5 Synapse files for one sample and stage for nf-core/spatialvi
-process DOWNLOAD_AND_STAGE {
-  tag "${meta.sample}"
-  container "sagebionetworks/synapsepythonclient:v2.6.0"
-  secret "SYNAPSE_AUTH_TOKEN"
-  publishDir "${params.outdir}/staging", pattern: "staged/*", saveAs: { "${meta.sample}/${file(it).name}" }, mode: 'copy'
-  cpus 2
-  memory '4 GB'
-
-  input:
-  tuple val(meta), val(synapse_ids)
-
-  output:
-  tuple val(meta), path("staged"), emit: staged
-
-  script:
-  def id1 = synapse_ids[0]
-  def id2 = synapse_ids[1]
-  def id3 = synapse_ids[2]
-  def id4 = synapse_ids[3]
-  def id_img = synapse_ids[4]
   def sample = meta.sample
   def slide = meta.slide
   def area = meta.area ?: ''
+  def imagePath = meta.image_path
   def outdirNorm = params.outdir.toString().replaceAll(/\/+$/, '')
-  def stagingPrefix = "${outdirNorm}/staging/${sample}"
+  def tarballPath = "${outdirNorm}/tarballs/${sample}/${sample}_fastqs.tar.gz"
+  """
+  set -e
+
+  mkdir -p fastqs
+
+  # Copy FASTQs to staging directory
+  cp ${fastq1} fastqs/
+  cp ${fastq2} fastqs/
+  cp ${fastq3} fastqs/
+  cp ${fastq4} fastqs/
+
+  # Replace spaces in FASTQ filenames
+  shopt -s nullglob
+  for f in fastqs/*\\ *; do [ -e "\$f" ] && mv "\$f" "\${f// /_}"; done
+
+  # Create FASTQ tarball
+  tar -czvf ${sample}_fastqs.tar.gz -C fastqs .
+
+  # Write samplesheet row - use original image path from synstage
+  echo "${sample},${tarballPath},${imagePath},${slide},${area}" > samplesheet_row.csv
+  """
+}
+
+// Collect all samplesheet rows and create final samplesheet
+process CREATE_SPATIALVI_SAMPLESHEET {
+  container "ubuntu:22.04"
+  publishDir "${params.outdir}", mode: 'copy'
+  cpus 1
+  memory '1 GB'
+
+  input:
+  path(rows)
+
+  output:
+  path("spatialvi_samplesheet.csv"), emit: samplesheet
+
+  script:
   def imageCol = params.cytassist ? 'cytaimage' : 'image'
   """
-  set -e
-  mkdir -p staged/fastqs
-  synapse get ${id1} && mv \$(ls -t -p | grep -v / | head -1) staged/fastqs/
-  synapse get ${id2} && mv \$(ls -t -p | grep -v / | head -1) staged/fastqs/
-  synapse get ${id3} && mv \$(ls -t -p | grep -v / | head -1) staged/fastqs/
-  synapse get ${id4} && mv \$(ls -t -p | grep -v / | head -1) staged/fastqs/
-  synapse get ${id_img} && mv \$(ls -t -p | grep -v / | head -1) staged/
-  shopt -s nullglob
-  for f in staged/fastqs/*\\ *; do [ -e "\$f" ] && mv "\$f" "\${f// /_}"; done
-  for f in staged/*\\ *; do [ -e "\$f" ] && mv "\$f" "\${f// /_}"; done
-  # Pack FASTQs into a tarball with sample name as prefix (spatialvi accepts .tar.gz for fastq_dir)
-  tar -czvf staged/${sample}_fastqs.tar.gz -C staged/fastqs .
-  rm -rf staged/fastqs
-  imgname=\$(ls staged/ | grep -v '\\.tar\\.gz\$' || true | head -1)
-  # Absolute paths to published staging dir; header uses cytaimage for Cytassist, image for brightfield
-  echo "sample,fastq_dir,${imageCol},slide,area" > staged/samplesheet.csv
-  echo "${sample},${stagingPrefix}/${sample}_fastqs.tar.gz,${stagingPrefix}/\${imgname},${slide},${area}" >> staged/samplesheet.csv
+  echo "sample,fastq_dir,${imageCol},slide,area" > spatialvi_samplesheet.csv
+  cat ${rows} >> spatialvi_samplesheet.csv
   """
 }
 
-// Run nf-core/spatialvi on staged data
-// Space Ranger requires 64 GB min (128 GB recommended), 8+ CPUs
-process RUN_SPATIALVI {
-  tag "${meta.sample}"
-  container "nextflow/nextflow:25.04.3"
-  cpus 16
-  memory '128 GB'
-  time '7d'
+// ============================================================================
+// WORKFLOWS
+// ============================================================================
 
-  input:
-  tuple val(meta), path(staged)
-
-  output:
-  tuple val(meta), path("results"), emit: results
-
-  script:
-  def pipeline = params.spatialvi_pipeline ?: 'sagebio-ada/spatialvi'
-  def release = params.spatialvi_release ?: 'dev'
-  def refArg = params.spaceranger_reference ? "--spaceranger_reference ${params.spaceranger_reference}" : ''
-  def probesetArg = params.spaceranger_probeset ? "--spaceranger_probeset ${params.spaceranger_probeset}" : ''
-  """
-  set -e
-  cp -r ${staged} ./workdir
-  cd workdir
-  WORKDIR=\$(pwd)
-  awk -v w="\$WORKDIR" -F',' 'NR==1{print;next}{ \$2=w"/"\$2; \$3=w"/"\$3; print }' OFS=',' samplesheet.csv > samplesheet_fullpath.csv && mv samplesheet_fullpath.csv samplesheet.csv
-
-  # NOTE: Running nested Nextflow with containers on AWS Batch is challenging.
-  # Disable Wave to avoid --platform flag issues with older Docker CLI.
-  # Use Docker directly with pre-built images from registries.
-  cat > spatialvi.config << 'INNERCONFIG'
-wave.enabled = false
-docker.enabled = true
-docker.runOptions = ''
-INNERCONFIG
-
-  nextflow run ${pipeline} \\
-    -r ${release} \\
-    --input samplesheet.csv \\
-    --outdir results \\
-    ${refArg} \\
-    ${probesetArg} \\
-    -c spatialvi.config
-  cp -r results ../results
-  """
-}
-
-// Upload staged files to Synapse (test run) using synapse store
-process INDEX_STAGING_TO_SYNAPSE {
-  tag "${meta.sample}"
-  container "sagebionetworks/synapsepythonclient:v2.6.0"
-  secret "SYNAPSE_AUTH_TOKEN"
-  cpus 2
-  memory '4 GB'
-
-  input:
-  tuple val(meta), path(staged)
-
-  output:
-  tuple val(meta), emit: indexed
-
-  script:
-  def parent = meta.results_parent_id ?: params.results_parent_id
-  """
-  # Upload each file in staged/ to Synapse
-  for f in ${staged}/*; do
-    synapse store --parentId ${parent} "\$f"
-  done
-  """
-}
-
-// Upload full spatialvi results directory to S3 (for indexing into Synapse via SYNINDEX)
-process UPLOAD_RESULTS_TO_S3 {
-  tag "${meta.sample}"
-  container "public.ecr.aws/amazonlinux/amazonlinux:2023"
-  cpus 2
-  memory '4 GB'
-
-  input:
-  tuple val(meta), path("results")
-
-  output:
-  tuple val(meta), path("results"), emit: uploaded
-
-  script:
-  def outdirNorm = params.outdir.toString().replaceAll(/\/+$/, '')
-  def s3_prefix = "${outdirNorm}/spatialvi_results/${meta.sample}"
-  """
-  yum install -y aws-cli
-  aws s3 cp --recursive results/ "${s3_prefix}/"
-  """
-}
-
-// Upload spatialvi results to Synapse using synapse store
-// Uploads the entire results directory recursively
-process INDEX_TO_SYNAPSE {
-  tag "${meta.sample}"
-  container "sagebionetworks/synapsepythonclient:v2.6.0"
-  secret "SYNAPSE_AUTH_TOKEN"
-  cpus 2
-  memory '4 GB'
-
-  input:
-  tuple val(meta), path(results)
-
-  output:
-  tuple val(meta), emit: indexed
-
-  script:
-  def parent = meta.results_parent_id ?: params.results_parent_id
-  """
-  # Upload entire results directory to Synapse (preserves folder structure)
-  synapse store --parentId ${parent} ${results}
-  """
-}
-
-workflow {
+// Entry: make_tarball - Create tarballs from synstage output and generate spatialvi samplesheet
+workflow MAKE_TARBALL_WF {
   if (!params.input) {
-    exit 1, "Please provide --input with path to samplesheet CSV (see README)."
+    exit 1, "Please provide --input with path to the synstage output samplesheet CSV."
   }
   if (!params.outdir?.toString()?.startsWith('s3://')) {
-    exit 1, "Outputs are stored in S3. Please set --outdir to an S3 URI (e.g. s3://your-bucket/prefix)."
+    exit 1, "Please set --outdir to an S3 URI (e.g. s3://your-bucket/prefix)."
   }
 
+  // Parse the synstage output samplesheet
+  // Expected columns: sample,fastq_1,fastq_2,fastq_3,fastq_4,image,slide,area
+  // The fastq_* and image columns contain S3 paths (from synstage)
   sample_rows = Channel
     .fromPath(params.input, checkIfExists: true)
     .splitCsv(header: true, strip: true)
-    .map { row -> parse_row(row) }
+    .map { row -> 
+      def meta = [
+        sample: row.sample,
+        slide: row.slide,
+        area: row.area ?: '',
+        image_path: row.image  // Store image path in meta to pass through
+      ]
+      tuple(
+        meta,
+        file(row.fastq_1),
+        file(row.fastq_2),
+        file(row.fastq_3),
+        file(row.fastq_4)
+      )
+    }
 
-  // Either fetch from S3 (skip_staging) or download from Synapse
-  if (params.skip_staging) {
-    FETCH_STAGED(sample_rows)
-    staged_ch = FETCH_STAGED.out.staged
-  } else {
-    DOWNLOAD_AND_STAGE(sample_rows)
-    staged_ch = DOWNLOAD_AND_STAGE.out.staged
-  }
-
-  if (params.test_staging_only) {
-    INDEX_STAGING_TO_SYNAPSE(staged_ch)
-  } else {
-    RUN_SPATIALVI(staged_ch)
-    UPLOAD_RESULTS_TO_S3(RUN_SPATIALVI.out.results)
-    INDEX_TO_SYNAPSE(UPLOAD_RESULTS_TO_S3.out.uploaded)
-  }
+  MAKE_TARBALL(sample_rows)
+  
+  // Collect all samplesheet rows and create final samplesheet
+  all_rows = MAKE_TARBALL.out.samplesheet_row
+    .map { meta, row -> row }
+    .collect()
+  
+  CREATE_SPATIALVI_SAMPLESHEET(all_rows)
 }
 
-// Parse one CSV row into meta map and list of 5 synapse IDs [f1,f2,f3,f4,image]
-def parse_row(row) {
-  def meta = [:]
-  meta.sample    = row.sample
-  meta.slide     = row.slide
-  meta.area      = row.area ?: ''
-  meta.results_parent_id = row.results_parent_id ?: params.results_parent_id
-  def ids = [
-    row.synapse_id_fastq_1,
-    row.synapse_id_fastq_2,
-    row.synapse_id_fastq_3,
-    row.synapse_id_fastq_4,
-    row.synapse_id_image
-  ]
-  return tuple(meta, ids)
+// Default workflow - show usage
+workflow {
+  log.info """
+  =========================================
+  spatialvi_nf_pipeline - Orca Orchestration
+  =========================================
+  
+  This pipeline is designed to be orchestrated via Orca (or Tower CLI).
+  
+  STEP 1: nf-synapse SYNSTAGE
+  ---------------------------
+  Stages files from Synapse to S3. Run via Orca or Tower.
+  Input: synstage_input.csv (with syn:// URIs)
+  Output: synstage/synstage_input.csv (with S3 paths)
+  
+  STEP 2: This pipeline (make_tarball)
+  ------------------------------------
+  nextflow run . --entry make_tarball \\
+    --input s3://bucket/synstage/synstage_input.csv \\
+    --outdir s3://bucket/prefix
+  
+  Output: spatialvi_samplesheet.csv + tarballs
+  
+  STEP 3: spatialvi
+  -----------------
+  Run sagebio-ada/spatialvi via Orca or Tower.
+  Input: spatialvi_samplesheet.csv from Step 2
+  Output: spatialvi results
+  
+  STEP 4: nf-synapse SYNINDEX
+  ---------------------------
+  Index results back to Synapse. Run via Orca or Tower.
+  Input: s3_prefix of spatialvi results
+  Output: Files indexed in Synapse
+  
+  =========================================
+  
+  Required parameters for make_tarball:
+    --input              : Samplesheet CSV (synstage output with S3 paths)
+    --outdir             : S3 URI for outputs
+  
+  Optional parameters:
+    --cytassist          : Use cytaimage column instead of image (default: false)
+  
+  See README.md for full Orca recipe and orchestration details.
+  """
+  exit 0
+}
+
+// Named workflow entry point
+workflow make_tarball {
+  MAKE_TARBALL_WF()
 }

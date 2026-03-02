@@ -1,0 +1,2 @@
+sample,fastq_dir,image,slide,area
+ANNUBP_V42N08_047_A1,s3://bucket/tarballs/ANNUBP_V42N08_047_A1/ANNUBP_V42N08_047_A1_fastqs.tar.gz,s3://bucket/tarballs/ANNUBP_V42N08_047_A1/image_out/image.tif,V42N08-047,A1
