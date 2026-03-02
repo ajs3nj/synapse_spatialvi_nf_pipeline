@@ -251,9 +251,9 @@ async def run_spatialvi_workflow(ops: NextflowTowerOps, dataset: SpatialviDatase
     synstage_run_id = ops.launch_workflow(synstage_info, "spot")
     print(f"  Run ID: {synstage_run_id}")
     status = await ops.monitor_workflow(run_id=synstage_run_id, wait_time=60 * 2)
-    print(f"  Status: {status}")
-    if status != "SUCCEEDED":
-        raise RuntimeError(f"SYNSTAGE failed for {dataset.id}: {status}")
+    print(f"  Status: {status.state.value}")
+    if not status.is_successful:
+        raise RuntimeError(f"SYNSTAGE failed for {dataset.id}: {status.state.value}")
     
     # Step 2: MAKE_TARBALL - Create tarballs and spatialvi samplesheet
     print(f"\n[Step 2/4] Launching MAKE_TARBALL for {dataset.id}...")
@@ -261,9 +261,9 @@ async def run_spatialvi_workflow(ops: NextflowTowerOps, dataset: SpatialviDatase
     tarball_run_id = ops.launch_workflow(tarball_info, "spot")
     print(f"  Run ID: {tarball_run_id}")
     status = await ops.monitor_workflow(run_id=tarball_run_id, wait_time=60 * 2)
-    print(f"  Status: {status}")
-    if status != "SUCCEEDED":
-        raise RuntimeError(f"MAKE_TARBALL failed for {dataset.id}: {status}")
+    print(f"  Status: {status.state.value}")
+    if not status.is_successful:
+        raise RuntimeError(f"MAKE_TARBALL failed for {dataset.id}: {status.state.value}")
     
     # Step 3: SPATIALVI - Run spatialvi analysis
     print(f"\n[Step 3/4] Launching SPATIALVI for {dataset.id}...")
@@ -271,9 +271,9 @@ async def run_spatialvi_workflow(ops: NextflowTowerOps, dataset: SpatialviDatase
     spatialvi_run_id = ops.launch_workflow(spatialvi_info, "spot")
     print(f"  Run ID: {spatialvi_run_id}")
     status = await ops.monitor_workflow(run_id=spatialvi_run_id, wait_time=60 * 2)
-    print(f"  Status: {status}")
-    if status != "SUCCEEDED":
-        raise RuntimeError(f"SPATIALVI failed for {dataset.id}: {status}")
+    print(f"  Status: {status.state.value}")
+    if not status.is_successful:
+        raise RuntimeError(f"SPATIALVI failed for {dataset.id}: {status.state.value}")
     
     # Step 4: SYNINDEX - Index results back to Synapse
     print(f"\n[Step 4/4] Launching SYNINDEX for {dataset.id}...")
@@ -281,9 +281,9 @@ async def run_spatialvi_workflow(ops: NextflowTowerOps, dataset: SpatialviDatase
     synindex_run_id = ops.launch_workflow(synindex_info, "spot")
     print(f"  Run ID: {synindex_run_id}")
     status = await ops.monitor_workflow(run_id=synindex_run_id, wait_time=60 * 2)
-    print(f"  Status: {status}")
-    if status != "SUCCEEDED":
-        raise RuntimeError(f"SYNINDEX failed for {dataset.id}: {status}")
+    print(f"  Status: {status.state.value}")
+    if not status.is_successful:
+        raise RuntimeError(f"SYNINDEX failed for {dataset.id}: {status.state.value}")
     
     print(f"\n{'='*60}")
     print(f"Completed spatialvi workflow for: {dataset.id}")
