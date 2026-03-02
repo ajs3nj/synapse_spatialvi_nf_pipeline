@@ -174,10 +174,10 @@ def prepare_synstage_info(dataset: SpatialviDataset) -> LaunchInfo:
         revision="main",
         profiles=["docker"],
         params={
-            "entry": "synstage",
             "input": dataset.synstage_input_samplesheet,
             "outdir": dataset.staging_location,
         },
+        entry_name="synstage",
         workspace_secrets=["SYNAPSE_AUTH_TOKEN"],
     )
 
@@ -185,7 +185,6 @@ def prepare_synstage_info(dataset: SpatialviDataset) -> LaunchInfo:
 def prepare_tarball_info(dataset: SpatialviDataset) -> LaunchInfo:
     """Generate LaunchInfo for make_tarball workflow."""
     params = {
-        "entry": "make_tarball",
         "input": dataset.synstage_output_samplesheet,
         "outdir": dataset.tarball_outdir,
     }
@@ -199,6 +198,7 @@ def prepare_tarball_info(dataset: SpatialviDataset) -> LaunchInfo:
         revision="orca-orchestration",
         profiles=["docker"],
         params=params,
+        entry_name="make_tarball",
     )
 
 
@@ -230,10 +230,10 @@ def prepare_synindex_info(dataset: SpatialviDataset) -> LaunchInfo:
         revision="main",
         profiles=["docker"],
         params={
-            "entry": "synindex",
             "s3_prefix": dataset.spatialvi_outdir,
             "parent_id": dataset.synapse_output_folder,
         },
+        entry_name="synindex",
         workspace_secrets=["SYNAPSE_AUTH_TOKEN"],
     )
 
