@@ -110,12 +110,6 @@ class SpatialviDataset:
         return f"s3://{self.bucket_name}/{self.project_prefix}/synstage"
     
     @property
-    def synstage_output_samplesheet(self) -> str:
-        """S3 path to the synstage output samplesheet (with S3 paths)."""
-        filename = Path(self.synstage_input_samplesheet).name
-        return f"{self.staging_location}/{filename}"
-    
-    @property
     def tarball_outdir(self) -> str:
         """S3 URI for tarball outputs."""
         return f"s3://{self.bucket_name}/{self.project_prefix}"
@@ -182,10 +176,19 @@ def prepare_synstage_info(dataset: SpatialviDataset) -> LaunchInfo:
     )
 
 
-def prepare_tarball_info(dataset: SpatialviDataset) -> LaunchInfo:
-    """Generate LaunchInfo for make_tarball workflow."""
+def prepare_tarball_info(dataset: SpatialviDataset, synstage_run_name: str) -> LaunchInfo:
+    """Generate LaunchInfo for make_tarball workflow.
+    
+    Args:
+        dataset: Dataset configuration.
+        synstage_run_name: Actual run name from SYNSTAGE (may have suffix like _2, _3).
+    """
+    # Build synstage output samplesheet path using actual run name
+    filename = Path(dataset.synstage_input_samplesheet).name
+    synstage_output = f"{dataset.staging_location}/{synstage_run_name}/{filename}"
+    
     params = {
-        "input": dataset.synstage_output_samplesheet,
+        "input": synstage_output,
         "outdir": dataset.tarball_outdir,
     }
     
@@ -255,9 +258,14 @@ async def run_spatialvi_workflow(ops: NextflowTowerOps, dataset: SpatialviDatase
     if not status.is_successful:
         raise RuntimeError(f"SYNSTAGE failed for {dataset.id}: {status.state.value}")
     
+    # Get actual synstage run name (may have suffix like _2, _3 if rerun)
+    synstage_workflow = ops.get_workflow(synstage_run_id)
+    synstage_run_name = synstage_workflow.run_name
+    print(f"  Synstage run name: {synstage_run_name}")
+    
     # Step 2: MAKE_TARBALL - Create tarballs and spatialvi samplesheet
     print(f"\n[Step 2/4] Launching MAKE_TARBALL for {dataset.id}...")
-    tarball_info = prepare_tarball_info(dataset)
+    tarball_info = prepare_tarball_info(dataset, synstage_run_name)
     tarball_run_id = ops.launch_workflow(tarball_info, "spot")
     print(f"  Run ID: {tarball_run_id}")
     status = await ops.monitor_workflow(run_id=tarball_run_id, wait_time=60 * 2)
