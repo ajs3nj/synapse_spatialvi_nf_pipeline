@@ -161,7 +161,11 @@ def generate_datasets() -> list[SpatialviDataset]:
 
 
 def prepare_synstage_info(dataset: SpatialviDataset) -> LaunchInfo:
-    """Generate LaunchInfo for nf-synapse SYNSTAGE."""
+    """Generate LaunchInfo for nf-synapse SYNSTAGE.
+    
+    nf-synapse has no named workflows; it uses the default workflow and
+    params.entry to select synstage vs synindex. Do not set entry_name.
+    """
     return LaunchInfo(
         run_name=dataset.synstage_run_name,
         pipeline="Sage-Bionetworks-Workflows/nf-synapse",
@@ -172,7 +176,6 @@ def prepare_synstage_info(dataset: SpatialviDataset) -> LaunchInfo:
             "input": dataset.synstage_input_samplesheet,
             "outdir": dataset.staging_location,
         },
-        entry_name="synstage",
         workspace_secrets=["SYNAPSE_AUTH_TOKEN"],
     )
 
@@ -227,7 +230,11 @@ def prepare_spatialvi_info(dataset: SpatialviDataset) -> LaunchInfo:
 
 
 def prepare_synindex_info(dataset: SpatialviDataset) -> LaunchInfo:
-    """Generate LaunchInfo for nf-synapse SYNINDEX."""
+    """Generate LaunchInfo for nf-synapse SYNINDEX.
+    
+    nf-synapse has no named workflows; it uses the default workflow and
+    params.entry to select synstage vs synindex. Do not set entry_name.
+    """
     return LaunchInfo(
         run_name=dataset.synindex_run_name,
         pipeline="Sage-Bionetworks-Workflows/nf-synapse",
@@ -238,7 +245,6 @@ def prepare_synindex_info(dataset: SpatialviDataset) -> LaunchInfo:
             "s3_prefix": dataset.spatialvi_outdir,
             "parent_id": dataset.synapse_output_folder,
         },
-        entry_name="synindex",
         workspace_secrets=["SYNAPSE_AUTH_TOKEN"],
     )
 
