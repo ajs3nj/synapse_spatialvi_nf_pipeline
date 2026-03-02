@@ -42,7 +42,7 @@ process MAKE_TARBALL {
   def tarballPath = "${outdirNorm}/tarballs/${sample}/${sample}_fastqs.tar.gz"
   """
   set -e
-  yum install -y tar gzip
+  yum install -y tar gzip procps
 
   mkdir -p fastqs
 
