@@ -31,7 +31,7 @@ process MAKE_TARBALL {
 
   output:
   tuple val(meta), path("${meta.sample}_fastqs.tar.gz"), emit: tarball
-  tuple val(meta), path("samplesheet_row.csv"), emit: samplesheet_row
+  tuple val(meta), path("${meta.sample}_samplesheet_row.csv"), emit: samplesheet_row
 
   script:
   def sample = meta.sample
@@ -58,8 +58,8 @@ process MAKE_TARBALL {
   # Create FASTQ tarball
   tar -czvf ${sample}_fastqs.tar.gz -C fastqs .
 
-  # Write samplesheet row - use original image path from synstage
-  echo "${sample},${tarballPath},${imagePath},${slide},${area}" > samplesheet_row.csv
+  # Write samplesheet row - use original image path from synstage (unique filename per sample to avoid collision when collected)
+  echo "${sample},${tarballPath},${imagePath},${slide},${area}" > ${sample}_samplesheet_row.csv
   """
 }
 

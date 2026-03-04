@@ -145,14 +145,25 @@ def generate_datasets() -> list[SpatialviDataset]:
     """Generate list of datasets to process.
     
     Modify this function to add your datasets.
+    
+    Parameters to set per run:
+      - id: Unique label for this run (used in Tower run names and S3 paths).
+      - synstage_input_samplesheet: S3 path to CSV with syn:// URIs (synstage input).
+      - synapse_output_folder: Synapse folder ID (e.g. syn73722889) where results are indexed.
+      - bucket_name: S3 bucket name.
+      - project_prefix: Prefix under bucket for all outputs (synstage, tarballs, spatialvi_results).
+      - spaceranger_reference: S3 path to refdata tarball.
+      - spaceranger_probeset: (optional) S3 path to probeset CSV.
+      - cytassist: True if samples use cytaimage column.
+      - spatialvi_pipeline / spatialvi_revision: (optional) spatialvi repo and branch.
     """
     return [
         SpatialviDataset(
-            id="annupb_test",
-            synstage_input_samplesheet="s3://ntap-add5-project-tower-bucket/synapse_spatialvi_testing/orca_annupb_test_samplesheet.csv",
-            synapse_output_folder="syn73722889",
+            id="multi_sample",
+            synstage_input_samplesheet="s3://ntap-add5-project-tower-bucket/synapse_spatialvi_testing/1_synstage_multi_sample_input.csv",
+            synapse_output_folder="syn73888474",
             bucket_name="ntap-add5-project-tower-bucket",
-            project_prefix="synapse_spatialvi_testing/annupb_test",
+            project_prefix="synapse_spatialvi_testing/multi_sample",
             spaceranger_reference="s3://ntap-add5-project-tower-bucket/reference/refdata-gex-GRCh38-2020-A.tar.gz",
             spaceranger_probeset="s3://ntap-add5-project-tower-bucket/spatialvi_testing/Visium_Human_Transcriptome_Probe_Set_v2.0_GRCh38-2020-A.csv",
             cytassist=True,
@@ -202,7 +213,7 @@ def prepare_tarball_info(dataset: SpatialviDataset, synstage_run_name: str) -> L
     return LaunchInfo(
         run_name=dataset.tarball_run_name,
         pipeline="ajs3nj/synapse_spatialvi_nf_pipeline",
-        revision="orca-orchestration",
+        revision="main",
         profiles=["docker"],
         params=params,
         entry_name="make_tarball",
